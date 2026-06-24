@@ -41,8 +41,8 @@ Before implementation work:
 - Do not read, export, copy, log, or upload AI CLI auth tokens.
 - Do not build a hosted model proxy into the default path.
 - Do not run background scans unless the user explicitly enables them.
-- Do not auto-execute write, sudo, destructive, or system-level commands in the default path.
-- Explicit owner-enabled per-profile CLI permission bypass may launch supported CLIs with their documented no-approval mode, but it must be disabled by default, visible in Settings, persisted per profile, and shown as `danger` risk.
+- Do not auto-run commands on the plugin's own initiative; every terminal action is started by the user. The plugin does not add its own approval gate on top of the CLI — command safety is delegated to the underlying CLI (Claude/Codex) and to the user's explicit terminal input.
+- Keep the per-profile CLI permission-bypass toggle: disabled by default, visible in Settings, persisted per profile, shown as `danger` risk, and launching supported CLIs in their documented no-approval mode when enabled.
 - Do not run the Decky plugin as root by default.
 - Do not add telemetry by default.
 - Keep local resource use low enough for Steam Deck Gaming Mode.
@@ -72,21 +72,20 @@ Before implementation work:
 
 ## Safety Model
 
-Every local action must classify risk before execution:
+Risk classification is informational metadata, not a gate on Terminal Mode. The plugin computes a risk level for commands and CLI launches for display, but it does not block user-initiated terminal launches or typed commands. Command safety is delegated to the underlying CLI (Claude/Codex) and to the user's explicit terminal input.
 
-| Risk | Examples | Required behavior |
-| --- | --- | --- |
-| read_only | list logs, inspect versions, query storage | Allowed after user request. |
-| low_write | create backup, write plugin config, update local index | Show plan and get approval. |
-| high_write | edit game config, launch option changes, flatpak permissions | Show exact diff/commands, backup, approval. |
-| danger | sudo, rm, pacman, systemctl, chmod, readonly partition changes | Separate explicit approval and rollback/restore path where possible. |
+| Risk | Examples |
+| --- | --- |
+| read_only | list logs, inspect versions, query storage |
+| low_write | create backup, write plugin config, update local index |
+| high_write | edit game config, launch option changes, flatpak permissions |
+| danger | sudo, rm, pacman, systemctl, chmod, readonly partition changes |
 
-Risk handling rules:
+Rules:
 
-- Natural-language approval is not enough for dangerous commands; show the exact command or diff.
-- Write actions need a staged plan before execution.
-- High-write and danger actions need a backup or rollback note where possible.
-- MCP tools must not bypass Decky-side approval for write actions unless the user has explicitly enabled per-profile owner bypass for the active CLI session; default behavior must keep staged approvals.
+- The plugin does not run write, sudo, destructive, or system commands on its own initiative; every terminal action is user-initiated.
+- The per-profile permission bypass stays disabled by default, visible in Settings, persisted per profile, and shown as `danger`; when enabled it launches supported CLIs in their native no-approval mode.
+- The MCP action-runner (planned execution path) still stages write actions and requires a Decky-side approval token before execution unless the user has enabled per-profile owner bypass for the active CLI session.
 
 ## Verification
 

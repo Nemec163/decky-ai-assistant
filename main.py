@@ -650,8 +650,6 @@ class Plugin:
         return {"sessions": [session.to_dict() for session in manager.list_sessions()]}
 
     async def start_terminal_session(self, request: dict[str, Any] | None = None) -> dict[str, Any]:
-        from deck_assistant_core import RiskLevel, plan_cli_launch
-
         manager = self._terminal_manager()
         payload = request or {}
         profile_name = str(payload.get("profile_name", "bash"))
@@ -659,23 +657,17 @@ class Plugin:
         rows = _int_payload(payload, "rows", 24)
 
         self._sync_terminal_profiles()
-        profile = self._get_cli_profile(profile_name)
-        launch_plan = plan_cli_launch(profile)
-        if (
-            launch_plan.path is not None
-            and launch_plan.risk is not RiskLevel.READ_ONLY
-            and not self._profile_permission_bypass_enabled(profile.name)
-        ):
-            raise ValueError(
-                f"profile launch requires staged approval: {profile.name} ({launch_plan.risk.value})"
-            )
+        # Validate the profile exists. The plugin does not gate launches by its
+        # own risk classification: command safety is delegated to the underlying
+        # CLI (Claude/Codex) and the user's explicit terminal input. The optional
+        # per-profile permission-bypass toggle still controls native no-approval
+        # launch args.
+        self._get_cli_profile(profile_name)
 
         session = manager.start_session(profile_name, cols=cols, rows=rows)
         return {"session": session.to_dict()}
 
     async def open_terminal_profile(self, request: dict[str, Any] | None = None) -> dict[str, Any]:
-        from deck_assistant_core import RiskLevel, plan_cli_launch
-
         manager = self._terminal_manager()
         payload = request or {}
         profile_name = str(payload.get("profile_name", "bash"))
@@ -683,16 +675,9 @@ class Plugin:
         rows = _int_payload(payload, "rows", 24)
 
         self._sync_terminal_profiles()
-        profile = self._get_cli_profile(profile_name)
-        launch_plan = plan_cli_launch(profile)
-        if (
-            launch_plan.path is not None
-            and launch_plan.risk is not RiskLevel.READ_ONLY
-            and not self._profile_permission_bypass_enabled(profile.name)
-        ):
-            raise ValueError(
-                f"profile launch requires staged approval: {profile.name} ({launch_plan.risk.value})"
-            )
+        # Validate the profile exists; launches are not gated by plugin risk
+        # classification (see start_terminal_session).
+        self._get_cli_profile(profile_name)
 
         session = manager.open_profile_session(profile_name, cols=cols, rows=rows)
         return {"session": session.to_dict()}

@@ -118,47 +118,29 @@ class LaunchGatingTests(_PluginPermissionTestCase):
         plugin.pty_sessions = manager
         return plugin, manager
 
-    def _patched_launch_plan(self):
-        """plan_cli_launch returning a READY, non-read-only plan with a path set.
-
-        This forces the launch gate's risk branch on (``path is not None`` and
-        ``risk is not READ_ONLY``) so the test exercises the staged-approval
-        gate itself rather than the missing-executable short-circuit.
-        """
-
-        from deck_assistant_core import RiskLevel
-
-        def fake_plan_cli_launch(profile, *args, **kwargs):
-            return types.SimpleNamespace(
-                path="/usr/bin/claude",
-                risk=RiskLevel.DANGER,
-            )
-
-        return mock.patch("deck_assistant_core.plan_cli_launch", side_effect=fake_plan_cli_launch)
-
-    def test_gate_blocks_non_read_only_launch_when_bypass_disabled(self) -> None:
+    def test_launch_proceeds_when_bypass_disabled(self) -> None:
+        # The plugin no longer gates terminal launches by its own risk
+        # classification: a profile launches even when the per-profile
+        # permission bypass is disabled.
         plugin, manager = self._make_plugin_with_stub_manager()
         self.assertFalse(plugin._profile_permission_bypass_enabled("claude"))
 
-        with self._patched_launch_plan():
-            with self.assertRaises(ValueError) as ctx:
-                asyncio.run(plugin.start_terminal_session({"profile_name": "claude"}))
+        result = asyncio.run(plugin.start_terminal_session({"profile_name": "claude"}))
 
-        self.assertIn("requires staged approval", str(ctx.exception))
-        # The gate fired before reaching the manager.
-        self.assertEqual(manager.started, [])
+        # The manager was reached and a session was returned; no gate fired.
+        self.assertEqual(manager.started, ["claude"])
+        self.assertEqual(result["session"]["profile_name"], "claude")
 
-    def test_gate_lifts_when_bypass_enabled(self) -> None:
+    def test_launch_proceeds_when_bypass_enabled(self) -> None:
         # Persist the bypass for the profile, then a fresh plugin loads it.
         Plugin()._save_profile_permissions({"claude": {"bypass_permissions": True}})
 
         plugin, manager = self._make_plugin_with_stub_manager()
         self.assertTrue(plugin._profile_permission_bypass_enabled("claude"))
 
-        with self._patched_launch_plan():
-            result = asyncio.run(plugin.start_terminal_session({"profile_name": "claude"}))
+        result = asyncio.run(plugin.start_terminal_session({"profile_name": "claude"}))
 
-        # Gate lifted: the manager was reached and a session was returned.
+        # The bypass toggle still applies; the launch reaches the manager.
         self.assertEqual(manager.started, ["claude"])
         self.assertEqual(result["session"]["profile_name"], "claude")
 
