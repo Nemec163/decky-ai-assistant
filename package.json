@@ -1,6 +1,6 @@
 {
   "name": "decky-ai-assistant",
-  "version": "0.1.0",
+  "version": "0.2.0-dev.1",
   "packageManager": "pnpm@9.15.9",
   "description": "Decky Terminal Mode plugin for running existing AI CLIs on Steam Deck.",
   "type": "module",
