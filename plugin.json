@@ -1,0 +1,11 @@
+{
+  "name": "Decky AI Assistant",
+  "author": "nmc",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["ai", "assistant", "terminal", "steam-deck"],
+    "description": "Run existing AI CLI sessions from Steam Deck Gaming Mode.",
+    "image": "https://opengraph.githubassets.com/1/SteamDeckHomebrew/decky-plugin-template"
+  }
+}

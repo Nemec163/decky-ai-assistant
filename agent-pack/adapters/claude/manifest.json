@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "id": "claude",
+  "display_name": "Claude Code",
+  "status": "template",
+  "verification": "MCP config shape verified against official Claude Code docs on 2026-06-21; plugin packaging still needs release verification.",
+  "verified_sources": [
+    "https://code.claude.com/docs/en/mcp"
+  ],
+  "instruction_entrypoints": [
+    "CLAUDE.md",
+    "AGENTS.md"
+  ],
+  "portable_assets": [
+    "agent-pack/skills",
+    "agent-pack/agents",
+    "agent-pack/commands",
+    "agent-pack/tool-policy.json"
+  ],
+  "mcp_templates": [
+    "agent-pack/mcp/claude.example.json"
+  ],
+  "conflict_policy": "CLAUDE.md mirrors AGENTS.md; Claude-specific packaging must not change risk rules."
+}

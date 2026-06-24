@@ -1,0 +1,107 @@
+{
+  "schema_version": 1,
+  "id": "decky-ai-assistant-agent-pack",
+  "canonical_instruction": "AGENTS.md",
+  "description": "Portable development and runtime support pack for AI agents working on or inside Decky AI Assistant.",
+  "adapter_sources": "agent-pack/adapters/sources.md",
+  "targets": [
+    {
+      "id": "codex",
+      "adapter_manifest": "agent-pack/adapters/codex/manifest.json"
+    },
+    {
+      "id": "claude",
+      "adapter_manifest": "agent-pack/adapters/claude/manifest.json"
+    }
+  ],
+  "skills": [
+    {
+      "id": "deck-project-developer",
+      "path": "agent-pack/skills/deck-project-developer",
+      "phase": "development"
+    },
+    {
+      "id": "deck-runtime-support",
+      "path": "agent-pack/skills/deck-runtime-support",
+      "phase": "runtime"
+    },
+    {
+      "id": "deck-diagnose-game",
+      "path": "agent-pack/skills/deck-diagnose-game",
+      "phase": "runtime"
+    },
+    {
+      "id": "deck-storage-doctor",
+      "path": "agent-pack/skills/deck-storage-doctor",
+      "phase": "runtime"
+    },
+    {
+      "id": "deck-flatpak-doctor",
+      "path": "agent-pack/skills/deck-flatpak-doctor",
+      "phase": "runtime"
+    },
+    {
+      "id": "deck-knowledge-curator",
+      "path": "agent-pack/skills/deck-knowledge-curator",
+      "phase": "development_and_runtime"
+    },
+    {
+      "id": "deck-safe-action-review",
+      "path": "agent-pack/skills/deck-safe-action-review",
+      "phase": "development_and_runtime"
+    }
+  ],
+  "roles": [
+    {
+      "id": "deck-planner",
+      "path": "agent-pack/agents/deck-planner.md"
+    },
+    {
+      "id": "deck-diagnostician",
+      "path": "agent-pack/agents/deck-diagnostician.md"
+    },
+    {
+      "id": "deck-safety-reviewer",
+      "path": "agent-pack/agents/deck-safety-reviewer.md"
+    },
+    {
+      "id": "deck-executor",
+      "path": "agent-pack/agents/deck-executor.md"
+    },
+    {
+      "id": "deck-knowledge-curator",
+      "path": "agent-pack/agents/deck-knowledge-curator.md"
+    }
+  ],
+  "commands": [
+    {
+      "id": "develop-slice",
+      "path": "agent-pack/commands/develop-slice.md"
+    },
+    {
+      "id": "diagnose-runtime",
+      "path": "agent-pack/commands/diagnose-runtime.md"
+    },
+    {
+      "id": "stage-safe-action",
+      "path": "agent-pack/commands/stage-safe-action.md"
+    }
+  ],
+  "runtime": {
+    "coordination": "agent-pack/runtime/coordination.md"
+  },
+  "tool_policy": "agent-pack/tool-policy.json",
+  "conflict_rules": [
+    "AGENTS.md is canonical for repo development instructions.",
+    "Use the deck-project-developer skill for repo-local implementation slices; runtime roles are explicit handoff boundaries, not the default editor.",
+    "Portable skills own shared behavior; target adapters only wrap or package it.",
+    "Diagnosis roles never execute writes.",
+    "One repo development slice has one active owner and one meaningful commit.",
+    "Development handoffs must include scope, files changed, verification, risk notes, commit status, and next owner.",
+    "Safety review is required before changing risk ceilings, approval-token boundaries, staged-action semantics, or execution permissions.",
+    "deck-executor only runs staged actions with Decky approval tokens.",
+    "stage_action creates a pending approval record, not execution approval.",
+    "Decky approval flow is the only approval-token release path.",
+    "One staged action ID has one owner role at a time."
+  ]
+}

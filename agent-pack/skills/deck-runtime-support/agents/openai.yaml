@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Runtime Support"
+  short_description: "Operate deployed Deck assistant workflows safely"
+  default_prompt: "Use $deck-runtime-support to diagnose a Steam Deck issue through read-only tools before staging actions."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Game Doctor"
+  short_description: "Diagnose Deck game launch and Proton issues"
+  default_prompt: "Use $deck-diagnose-game to diagnose a Steam Deck game launch or performance issue with read-only evidence before proposing fixes."

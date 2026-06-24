@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "codex",
+  "display_name": "Codex CLI",
+  "status": "template",
+  "verification": "MCP config shape verified against official Codex docs on 2026-06-21; plugin packaging still needs release verification.",
+  "verified_sources": [
+    "https://developers.openai.com/codex/mcp"
+  ],
+  "instruction_entrypoints": [
+    "AGENTS.md"
+  ],
+  "portable_assets": [
+    "agent-pack/skills",
+    "agent-pack/agents",
+    "agent-pack/commands",
+    "agent-pack/tool-policy.json"
+  ],
+  "mcp_templates": [
+    "agent-pack/mcp/codex.example.toml"
+  ],
+  "conflict_policy": "Use AGENTS.md as canonical; Codex-specific packaging must not rewrite portable skills."
+}

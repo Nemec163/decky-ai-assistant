@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Flatpak Doctor"
+  short_description: "Diagnose Flatpak launcher issues"
+  default_prompt: "Use $deck-flatpak-doctor to diagnose Heroic, Lutris, Bottles, Flatpak permissions, or runtime issues with read-only evidence before proposing fixes."

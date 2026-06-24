@@ -1,0 +1,14 @@
+# Codex MCP template.
+# Official docs verified on 2026-06-21:
+# https://developers.openai.com/codex/mcp
+# Use with ~/.codex/config.toml or trusted project .codex/config.toml.
+
+[mcp_servers.deck_assistant]
+command = "deck-assistant-mcp"
+args = ["serve"]
+enabled = true
+tool_timeout_sec = 60
+default_tools_approval_mode = "prompt"
+
+[mcp_servers.deck_assistant.env]
+DECK_ASSISTANT_MODE = "local"

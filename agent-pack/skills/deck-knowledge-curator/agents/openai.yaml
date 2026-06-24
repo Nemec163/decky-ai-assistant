@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Knowledge Curator"
+  short_description: "Curate licensed Deck knowledge sources"
+  default_prompt: "Use $deck-knowledge-curator to add or update a knowledge source with license, citation, and resource-limit checks."

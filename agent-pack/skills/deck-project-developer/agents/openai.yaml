@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Project Developer"
+  short_description: "Develop the Decky AI Assistant repo safely"
+  default_prompt: "Use $deck-project-developer to implement one scoped repository change with docs and verification."

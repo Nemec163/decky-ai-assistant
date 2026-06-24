@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deck Storage Doctor"
+  short_description: "Find safe Deck storage cleanup candidates"
+  default_prompt: "Use $deck-storage-doctor to triage shadercache, compatdata, logs, screenshots, and videos with read-only reports before any cleanup."

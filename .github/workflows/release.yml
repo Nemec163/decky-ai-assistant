@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: npm exec --yes pnpm@9 -- install --frozen-lockfile
+
+      - name: Typecheck
+        run: npm exec --yes pnpm@9 -- run check
+
+      - name: Guard package version matches tag
+        run: |
+          VERSION="$(node -p "require('./package.json').version")"
+          TAG="${GITHUB_REF_NAME#v}"
+          if [ "$VERSION" != "$TAG" ]; then
+            echo "::error title=Version mismatch::package.json version $VERSION does not match tag $GITHUB_REF_NAME"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Package plugin
+        run: npm exec --yes pnpm@9 -- run package
+
+      - name: Compute release channel
+        run: |
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            echo "PRERELEASE=true" >> "$GITHUB_ENV"
+          else
+            echo "PRERELEASE=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          args=(
+            release
+            create
+            "$GITHUB_REF_NAME"
+            "out/decky-ai-assistant-v${VERSION}.zip"
+            --title
+            "$GITHUB_REF_NAME"
+            --generate-notes
+          )
+          if [[ "$PRERELEASE" == "true" ]]; then
+            args+=(--prerelease)
+          else
+            args+=(--latest)
+          fi
+          gh "${args[@]}"

@@ -1,0 +1,18 @@
+{
+  "note": "Claude Code MCP template for the bundled deck-assistant stdio server. Official docs verified on 2026-06-21: https://code.claude.com/docs/en/mcp. Use as .mcp.json for project scope or with claude mcp add-json. Replace PYTHONPATH with the absolute paths to the deployed packages/core/src and packages/mcp-server/src; the Decky native pack install writes these automatically into the managed Claude workspace.",
+  "mcpServers": {
+    "deck-assistant": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "-m",
+        "deck_assistant_mcp",
+        "serve"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/deck/homebrew/plugins/decky-ai-assistant/packages/core/src:/home/deck/homebrew/plugins/decky-ai-assistant/packages/mcp-server/src",
+        "DECK_ASSISTANT_MODE": "local"
+      }
+    }
+  }
+}
