@@ -18,73 +18,32 @@
     ],
     "planning_read": [
       "propose_fix"
-    ],
-    "action_staging": [
-      "stage_action"
-    ],
-    "approved_execution": [
-      "run_approved_action"
     ]
   },
   "role_tool_policy": {
     "deck-planner": {
       "allowed_groups": [
         "knowledge_read",
+        "diagnostics_read",
         "planning_read"
-      ],
-      "max_risk": "read_only",
-      "may_execute": false
+      ]
     },
     "deck-diagnostician": {
       "allowed_groups": [
         "knowledge_read",
-        "diagnostics_read"
-      ],
-      "max_risk": "read_only",
-      "may_execute": false
-    },
-    "deck-safety-reviewer": {
-      "allowed_groups": [
-        "knowledge_read",
-        "planning_read",
-        "action_staging"
-      ],
-      "max_risk": "low_write",
-      "may_execute": false
-    },
-    "deck-executor": {
-      "allowed_groups": [
-        "approved_execution"
-      ],
-      "max_risk": "danger",
-      "may_execute": true
+        "diagnostics_read",
+        "planning_read"
+      ]
     },
     "deck-knowledge-curator": {
       "allowed_groups": [
         "knowledge_read",
-        "action_staging"
-      ],
-      "max_risk": "low_write",
-      "may_execute": false
+        "diagnostics_read",
+        "planning_read"
+      ]
     }
   },
   "handoff_policy": {
-    "staging_is_not_execution": true,
-    "action_staging_owner_roles": [
-      "deck-safety-reviewer",
-      "deck-knowledge-curator"
-    ],
-    "approval_token_release_path": "Decky approval flow",
-    "approval_token_consumer_roles": [
-      "deck-executor"
-    ],
-    "executor_must_match": [
-      "staged_action_id",
-      "expected_risk",
-      "command_list",
-      "file_edit_list"
-    ],
-    "tokens_must_not_be_logged": true,
     "single_owner_per_repo_slice": true,
     "single_commit_per_repo_slice": true,
     "repo_development_handoff_fields": [
@@ -96,12 +55,6 @@
       "commit_status",
       "allowed_next_role",
       "blocked_condition"
-    ],
-    "safety_review_required_change_types": [
-      "risk_ceiling",
-      "approval_token_boundary",
-      "staged_action_semantics",
-      "execution_permission"
     ]
   }
 }

@@ -7,7 +7,7 @@
 | Open repo | `cd /Users/nmc/Documents/WORK-NMC/GitHub/decky-ai-assistant` | Repository root. |
 | Check state | `git status --short` | Shows pending changes. |
 | Read canonical agent rules | [AGENTS.md](../AGENTS.md) | Required for AI-agent implementation work. |
-| Read contributing workflow | [CONTRIBUTING.md](../CONTRIBUTING.md) | Required before changing workflow, review gates, or release rules. |
+| Read contributing workflow | [CONTRIBUTING.md](../CONTRIBUTING.md) | Required before changing workflow, review rules, or release rules. |
 | Read roadmap | [ROADMAP.md](../ROADMAP.md) | Required before implementation. |
 | Read agent pack registry | [agent-pack/manifest.json](../agent-pack/manifest.json) | Required before changing skills, roles, commands, adapters, or tool policy. |
 
@@ -28,10 +28,10 @@ Future constraints:
 | Check | Command | Notes |
 | --- | --- | --- |
 | Repo docs validation | `python3 /Users/nmc/.codex/skills/repo-docs/scripts/validate_repo_docs.py /Users/nmc/Documents/WORK-NMC/GitHub/decky-ai-assistant` | Validates required docs shape. |
-| Agent pack validation | `python3 agent-pack/scripts/validate_agent_pack.py` | Validates skills, roles, commands, adapter manifests, MCP templates, tool policy, and staged-action handoff role alignment. |
+| Agent pack validation | `python3 agent-pack/scripts/validate_agent_pack.py` | Validates skills, roles, commands, adapter manifests, MCP templates, and tool policy. |
 | Agent skill validation | `python3 /Users/nmc/.codex/skills/.system/skill-creator/scripts/quick_validate.py agent-pack/skills/<skill-name>` | Run for changed skills. |
-| Core unit tests | `PYTHONPATH=packages/core/src python3 -m unittest discover -s packages/core/tests` | Validates PTY session lifecycle, PTY child env sanitization, custom profile injection, risk classification, staged-action contracts and approval-plan rendering, CLI profile detection, knowledge contracts/source registry/inventory/local-folder manifest building, SQLite FTS5/BM25 persistence, and diagnostics report/reader contracts. |
-| MCP unit tests | `PYTHONPATH=packages/core/src:packages/mcp-server/src python3 -m unittest discover -s packages/mcp-server/tests` | Validates MCP contract catalog, approval metadata, injected read-only dispatcher handlers/readers, non-executing staged-action support, in-process dispatcher shell behavior, and the JSON-RPC 2.0 stdio MCP server (`initialize`, `tools/list`, `tools/call`, execution refusal). |
+| Core unit tests | `PYTHONPATH=packages/core/src python3 -m unittest discover -s packages/core/tests` | Validates PTY session lifecycle, PTY child env sanitization, custom profile injection, risk classification, CLI profile detection, knowledge contracts/source registry/inventory/local-folder manifest building, SQLite FTS5/BM25 persistence, and diagnostics report/reader contracts. |
+| MCP unit tests | `PYTHONPATH=packages/core/src:packages/mcp-server/src python3 -m unittest discover -s packages/mcp-server/tests` | Validates MCP contract catalog, risk metadata, injected read-only dispatcher handlers/readers, in-process dispatcher shell behavior, and the JSON-RPC 2.0 stdio MCP server (`initialize`, `tools/list`, `tools/call`). |
 | MCP server smoke | `printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}' '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \| PYTHONPATH=packages/core/src:packages/mcp-server/src python3 -m deck_assistant_mcp serve` | Confirms the stdio server starts and lists the Deck tool catalog. |
 | Decky dependency install | `npm exec --yes pnpm@9 -- install` | Uses the `pnpm` v9 line recommended by the official Decky plugin template. |
 | Decky typecheck | `npm exec --yes pnpm@9 -- run check` | Runs `tsc --noEmit` for the Decky frontend. |
@@ -50,8 +50,8 @@ Releases ship on two channels — **stable** (`stable` branch, tags `vX.Y.Z`, Gi
 | Cut a release | Push a tag matching `package.json` version | `.github/workflows/release.yml` triggers on `v*` tags: it type-checks, packages the ZIP, verifies the tag matches `package.json`, and publishes a GitHub Release via `gh` — `--prerelease` for tags containing `-` (dev), `--latest` for clean `vX.Y.Z` tags (stable). |
 | Release channels | [RELEASING.md](../RELEASING.md) | dev on `main` (`vX.Y.Z-dev.N`), stable on the `stable` branch (`vX.Y.Z`); the in-plugin self-update filters releases by the channel chosen in Settings (default stable). |
 | Knowledge pack build | Unknown | Planned GitHub Action/static artifact flow. |
-| Agent pack release | Bundled in Decky package; public release artifacts planned | The Decky ZIP includes `agent-pack` so Settings can install user-local Codex and Claude native assistant assets after explicit confirmation. Public marketplace/release distribution remains separate work. |
-| Plugin release artifact | GitHub Release asset `decky-ai-assistant-v<version>.zip` | Install by URL from the release asset; never use GitHub's `Source code (zip)` (it lacks the built `dist/index.js`). |
+| Agent pack release | Bundled in Decky package; public release artifacts planned | The Decky ZIP includes `agent-pack` so Settings can install user-local Codex and Claude native assistant assets after a user request. Public marketplace/release distribution remains separate work. |
+| Plugin release artifact | GitHub Release asset `decky-ai-assistant-v<version>.zip` | Install by URL from the release asset; never use GitHub's `Source code (zip)` because it lacks the built frontend bundle. |
 
 ## Runtime / Deployment
 
@@ -71,12 +71,12 @@ Current scope:
 - Shared core and MCP Python modules import on the Deck.
 - CLI profile contracts render without launching any CLI.
 - Built-in Terminal Mode profiles launch through the Python PTY manager when their executables can be resolved from `PATH`, Decky runtime path hints, or the managed npm bin directory.
-- Built-in Codex and Claude setup actions can install/update the latest npm package into `~/.local/share/decky-ai-assistant/npm`, bootstrap user-local Node.js 22 when npm is absent, and open or resume the official auth flow in a transient terminal session after explicit user confirmation.
-- Built-in Codex and Claude settings can show a `low_write` native assistant pack install plan and write the bundled adapter assets into user-local CLI extension directories only after explicit user confirmation. Codex pack installation writes the user-local plugin, a `./`-relative marketplace entry, global runtime skills, plugin MCP metadata, and a stable `~/.local/share/decky-ai-assistant/workspaces/codex` launch directory whose managed `AGENTS.md` frames the session as the Steam Deck assistant and whose managed `.codex/config.toml` registers the local `deck-assistant` MCP server. Claude pack installation writes direct user-level runtime skills, user-level agents, user-level commands, a self-contained plugin bundle under `~/.claude/plugins/decky-ai-assistant`, and a stable `~/.local/share/decky-ai-assistant/workspaces/claude` launch directory whose managed `CLAUDE.md` frames the session as the Steam Deck assistant and whose managed `.mcp.json`/`settings.local.json` register and pre-enable the local `deck-assistant` MCP server so supported CLIs start as Deck assistants with the diagnostics/staging tools wired in and project trust persisted outside the home directory.
+- Built-in Codex and Claude setup actions can install/update the latest npm package into `~/.local/share/decky-ai-assistant/npm`, bootstrap user-local Node.js 22 when npm is absent, and open or resume the official auth flow in a transient terminal session after the user requests the action.
+- Built-in Codex and Claude settings can show a `low_write` native assistant pack install plan and write the bundled adapter assets into user-local CLI extension directories after the user requests the action. Codex pack installation writes the user-local plugin, a `./`-relative marketplace entry, global runtime skills, plugin MCP metadata, and a stable `~/.local/share/decky-ai-assistant/workspaces/codex` launch directory whose managed `AGENTS.md` frames the session as the Steam Deck assistant and whose managed `.codex/config.toml` registers the local `deck-assistant` MCP server. Claude pack installation writes direct user-level runtime skills, user-level agents, user-level commands, a self-contained plugin bundle under `~/.claude/plugins/decky-ai-assistant`, and a stable `~/.local/share/decky-ai-assistant/workspaces/claude` launch directory whose managed `CLAUDE.md` frames the session as the Steam Deck assistant and whose managed `.mcp.json`/`settings.local.json` register and pre-enable the local `deck-assistant` MCP server so supported CLIs start as Deck assistants with diagnostics and planning tools wired in and project trust persisted outside the home directory.
 - Every profile settings view shows a permission-bypass toggle. Built-in Codex and Claude profiles launch with their CLI-native no-approval flags when enabled; custom profiles are trusted as configured. The setting is disabled by default and reported as `danger`.
 - The plugin panel shows launchable profiles only; missing built-in CLIs are configured from Settings instead of appearing as broken launch buttons.
 - PTY child processes and read-only CLI probes strip Decky/Steam dynamic library overrides such as `LD_LIBRARY_PATH` before launching shells or CLIs.
-- Custom profiles can be added to Decky settings as structured argv; non-read-only custom launches remain blocked unless the owner enables that profile's permission-bypass toggle.
+- Custom profiles can be added to Decky settings as structured argv; launch risk is reported for display only.
 - Terminal input goes through xterm directly. The visually hidden Decky TextField is only a Steam virtual-keyboard trigger and text bridge, not the command-entry surface.
 - Terminal mode keeps the toolbar, auth-link, paste fallback, voice, and extra-key controls visible for touch while Decky controller focus stays on xterm; the top help button opens terminal shortcuts in a modal instead of using Steam's expanded action footer.
 - HTTP(S) auth links printed by CLI login flows appear above the terminal with Open, Copy, and Hide actions. Only sign-in/auth links are surfaced: a link qualifies when the URL is auth-shaped (oauth/authorize/device/sso/openid, OAuth query params, or an `auth`/`login`/`accounts`/`sso`/`id` host) or when login wording (sign in, authenticate, verification/device code, "open this link in your browser", etc.) sits within ~320 characters of it; ordinary URLs (docs, repos) are ignored. The panel stays until the user presses Hide, the session restarts/stops, or auth-completion wording appears after the latest link. Browser codes are pasted through the terminal toolbar Paste button, the Y shortcut, or Ctrl+V / Shift+Insert (which the terminal intercepts so a raw Ctrl+V never reaches the CLI). Paste reads the clipboard through the backend, which reads the gamescope Xwayland selection directly via libX11 (`DISPLAY` :0/:1, `CLIPBOARD` then `PRIMARY`) — the focus-independent path that works in Gaming Mode, where there is no wl-paste/xclip/xsel and klipper is desktop only. Clipboard text is always delivered to the PTY as plain (bracketed) text; an empty clipboard surfaces a brief toast rather than an error. Copy writes the selection to the same Xwayland clipboard via `execCommand("copy")`. Links and bounded terminal replay text are kept in memory only. Stale helper links are suppressed after Hide, restart/stop, or recognized auth completion.
@@ -95,7 +95,7 @@ npm exec --yes pnpm@9 -- install
 npm exec --yes pnpm@9 -- run package
 ```
 
-The package script validates TypeScript, builds the Decky frontend, stages the Python backend, repo-local Python packages, `agent-pack`, docs, and host instruction files, creates a ZIP under `out`, and checks the archive.
+The package script validates TypeScript, builds the Decky frontend, collects the Python backend, repo-local Python packages, `agent-pack`, docs, and host instruction files, creates a ZIP under `out`, and checks the archive.
 
 Install by URL:
 
@@ -151,7 +151,7 @@ Record the Decky Loader version, SteamOS version, and each failed step before ch
 
 - Keep each change scoped to one coherent slice.
 - Treat [AGENTS.md](../AGENTS.md) as canonical; host-specific instruction files must mirror it.
-- Use [CONTRIBUTING.md](../CONTRIBUTING.md) for review gates and PR expectations.
+- Use [CONTRIBUTING.md](../CONTRIBUTING.md) for review rules and PR expectations.
 - Use [.github/pull_request_template.md](../.github/pull_request_template.md) when opening pull requests.
 - Use [agent-pack/manifest.json](../agent-pack/manifest.json) as the registry for AI agent skills, roles, commands, adapter templates, and conflict rules.
 - Update docs in the same change when commands, contracts, directories, risk behavior, or workflow rules change.
@@ -161,7 +161,7 @@ Record the Decky Loader version, SteamOS version, and each failed step before ch
 - Start with logs from Decky backend and frontend console once implementation exists.
 - Terminal issues should be isolated by profile: `bash` first, then provider CLI.
 - Provider auth issues must be debugged through official CLI commands running in PTY setup/auth sessions, not token inspection.
-- MCP issues should expose server startup, tool schema, timeout, and approval-state diagnostics.
+- MCP issues should expose server startup, tool schema, timeout, and risk/action-state diagnostics.
 - Agent pack issues should start with `python3 agent-pack/scripts/validate_agent_pack.py`, then inspect the referenced skill, role, command, adapter, or tool-policy file.
 
 ## Known Operational Risks
@@ -172,5 +172,5 @@ Record the Decky Loader version, SteamOS version, and each failed step before ch
 - User-added repositories can be too large for local indexing.
 - CLI providers may change auth flows or config paths.
 - CLI providers may change npm package names, Node.js requirements, release artifact URLs, or first-run auth prompts; managed setup should fail visibly in the terminal instead of falling back to system package managers.
-- Dangerous commands must never be hidden behind natural-language approval text.
+- Dangerous commands must never be hidden behind vague natural-language text.
 - Claude MCP config shape was verified on 2026-06-21; Codex MCP config and plugin MCP metadata paths were rechecked against official OpenAI Codex docs on 2026-06-23. Target-native release packaging must still be verified before publishing.

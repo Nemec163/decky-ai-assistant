@@ -34,12 +34,6 @@ REPO_HANDOFF_FIELDS = [
     "allowed_next_role",
     "blocked_condition",
 ]
-SAFETY_REVIEW_CHANGE_TYPES = [
-    "risk_ceiling",
-    "approval_token_boundary",
-    "staged_action_semantics",
-    "execution_permission",
-]
 MCP_TOOL_RISKS = {
     "search_knowledge": "read_only",
     "list_sources": "read_only",
@@ -47,9 +41,6 @@ MCP_TOOL_RISKS = {
     "read_proton_logs": "read_only",
     "get_storage_report": "read_only",
     "propose_fix": "read_only",
-    "stage_action": "low_write",
-    # Variable-risk execution must be capped at the highest supported risk.
-    "run_approved_action": "danger",
 }
 
 
@@ -83,10 +74,6 @@ def require_unique(items: list[dict], label: str) -> list[str]:
     if duplicates:
         fail(f"duplicate {label} ids: {', '.join(duplicates)}")
     return ids
-
-
-def risk_rank(risk: str) -> int:
-    return VALID_RISKS.index(risk)
 
 
 def validate_tool_policy(policy: dict, role_ids: list[str]) -> None:
@@ -126,93 +113,27 @@ def validate_tool_policy(policy: dict, role_ids: list[str]) -> None:
     if unknown_policy_roles:
         unknown = ", ".join(sorted(unknown_policy_roles))
         fail(f"role_tool_policy contains unknown roles: {unknown}")
+    missing_policy_roles = set(role_ids) - set(role_policy)
+    if missing_policy_roles:
+        missing = ", ".join(sorted(missing_policy_roles))
+        fail(f"role_tool_policy missing roles: {missing}")
 
     for role_id, rule in role_policy.items():
         allowed_groups = rule.get("allowed_groups", [])
         if not isinstance(allowed_groups, list):
             fail(f"allowed_groups must be a list for {role_id}")
-        max_risk = rule.get("max_risk")
-        if max_risk not in VALID_RISKS:
-            fail(f"invalid max_risk for {role_id}: {max_risk}")
-        may_execute = rule.get("may_execute")
-        if not isinstance(may_execute, bool):
-            fail(f"may_execute must be boolean for {role_id}")
 
         for group in allowed_groups:
             if not isinstance(group, str) or not group:
                 fail(f"role {role_id} contains invalid tool group id")
             if group not in tool_groups:
                 fail(f"role {role_id} allows unknown tool group: {group}")
-            for tool in tool_groups[group]:
-                tool_risk = MCP_TOOL_RISKS[tool]
-                if risk_rank(tool_risk) > risk_rank(max_risk):
-                    fail(
-                        f"role {role_id} allows {tool} ({tool_risk}) "
-                        f"above max_risk {max_risk}"
-                    )
-
-        has_execution_group = "approved_execution" in allowed_groups
-        if has_execution_group and may_execute is not True:
-            fail(
-                f"role {role_id} allows approved_execution "
-                "but may_execute is not true"
-            )
-        if may_execute is True and not has_execution_group:
-            fail(f"role {role_id} may_execute true without approved_execution")
 
 
 def validate_handoff_policy(policy: dict, role_ids: list[str]) -> None:
     handoff = policy.get("handoff_policy", {})
     if not isinstance(handoff, dict):
         fail("handoff_policy must be an object")
-
-    role_policy = policy.get("role_tool_policy", {})
-    role_id_set = set(role_ids)
-
-    staging_roles = handoff.get("action_staging_owner_roles", [])
-    token_consumer_roles = handoff.get("approval_token_consumer_roles", [])
-    if not isinstance(staging_roles, list) or not staging_roles:
-        fail("handoff_policy action_staging_owner_roles must be a non-empty list")
-    if not isinstance(token_consumer_roles, list) or not token_consumer_roles:
-        fail("handoff_policy approval_token_consumer_roles must be a non-empty list")
-
-    for field, configured_roles in (
-        ("action_staging_owner_roles", staging_roles),
-        ("approval_token_consumer_roles", token_consumer_roles),
-    ):
-        invalid_roles = [
-            role_id for role_id in configured_roles if not isinstance(role_id, str) or not role_id
-        ]
-        if invalid_roles:
-            fail(f"handoff_policy {field} contains invalid role ids")
-        duplicates = sorted(
-            {role_id for role_id in configured_roles if configured_roles.count(role_id) > 1}
-        )
-        if duplicates:
-            fail(f"handoff_policy {field} contains duplicate roles: {', '.join(duplicates)}")
-        unknown_roles = sorted(set(configured_roles) - role_id_set)
-        if unknown_roles:
-            fail(f"handoff_policy {field} contains unknown roles: {', '.join(unknown_roles)}")
-
-    if set(staging_roles) & set(token_consumer_roles):
-        fail("handoff_policy staging roles must not consume approval tokens")
-
-    policy_staging_roles = {
-        role_id
-        for role_id, rule in role_policy.items()
-        if "action_staging" in rule.get("allowed_groups", [])
-    }
-    if set(staging_roles) != policy_staging_roles:
-        fail("handoff_policy action_staging_owner_roles must match action_staging roles")
-
-    policy_execution_roles = {
-        role_id
-        for role_id, rule in role_policy.items()
-        if "approved_execution" in rule.get("allowed_groups", [])
-        or rule.get("may_execute") is True
-    }
-    if set(token_consumer_roles) != policy_execution_roles:
-        fail("handoff_policy approval_token_consumer_roles must match execution roles")
 
     repo_handoff_fields = handoff.get("repo_development_handoff_fields")
     if repo_handoff_fields != REPO_HANDOFF_FIELDS:
@@ -222,10 +143,6 @@ def validate_handoff_policy(policy: dict, role_ids: list[str]) -> None:
         fail("handoff_policy single_owner_per_repo_slice must be true")
     if handoff.get("single_commit_per_repo_slice") is not True:
         fail("handoff_policy single_commit_per_repo_slice must be true")
-
-    safety_review_change_types = handoff.get("safety_review_required_change_types")
-    if safety_review_change_types != SAFETY_REVIEW_CHANGE_TYPES:
-        fail("handoff_policy safety_review_required_change_types must match canonical order")
 
 
 def validate_openai_yaml(path: Path, skill_id: str) -> None:
@@ -334,12 +251,6 @@ def validate_agents(role_entries: list[dict], policy: dict) -> None:
         policy_groups = set(role_policy[role_id].get("allowed_groups", []))
         if declared_groups != policy_groups:
             fail(f"tool group mismatch for {role_id}")
-        max_risk = role_policy[role_id].get("max_risk")
-        if max_risk not in VALID_RISKS:
-            fail(f"invalid max_risk for {role_id}: {max_risk}")
-        may_execute = str(role_policy[role_id].get("may_execute")).lower()
-        if fields.get("may_execute") != may_execute:
-            fail(f"may_execute mismatch for {role_id}")
 
 
 def validate_adapters(targets: list[dict]) -> None:
@@ -378,9 +289,8 @@ def validate_coordination(manifest: dict) -> None:
             fail(f"coordination file missing repo handoff field: {field}")
     required_phrases = (
         "one meaningful commit",
-        "deck-safety-reviewer",
-        "approval-token boundaries",
-        "execution permissions",
+        "terminal-first runtime",
+        "active CLI",
     )
     for phrase in required_phrases:
         if phrase not in text:
@@ -396,7 +306,6 @@ def validate_development_skill(skills: list[dict]) -> None:
             "`slice_goal`",
             "`files_in_scope`",
             "`commit_status`",
-            "deck-safety-reviewer",
             "one meaningful commit",
         )
         for phrase in required_phrases:

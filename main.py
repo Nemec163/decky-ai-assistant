@@ -253,7 +253,7 @@ class Plugin:
         return {"plan": plan_cli_setup_action(profile, action).to_dict()}
 
     async def open_cli_setup_action(self, request: dict[str, Any]) -> dict[str, Any]:
-        from deck_assistant_core import RiskLevel, plan_cli_setup_action
+        from deck_assistant_core import plan_cli_setup_action
         from deck_assistant_core.cli import CliSetupStatus
 
         manager = self._terminal_manager()
@@ -262,15 +262,10 @@ class Plugin:
         action = str(payload.get("action", "install_auth"))
         cols = _int_payload(payload, "cols", 80)
         rows = _int_payload(payload, "rows", 24)
-        confirmed = bool(payload.get("confirmed", False))
 
         plan = plan_cli_setup_action(profile, action)
         if plan.status is not CliSetupStatus.READY:
             raise ValueError(plan.error or plan.message or "CLI setup action is not ready")
-        if plan.risk is not RiskLevel.READ_ONLY and not confirmed:
-            raise ValueError(
-                f"setup action requires explicit confirmation: {profile.name} ({plan.risk.value})"
-            )
 
         session = manager.open_transient_session(plan.to_profile(), cols=cols, rows=rows)
         return {"session": session.to_dict(), "plan": plan.to_dict()}
@@ -292,11 +287,6 @@ class Plugin:
 
         payload = request or {}
         profile = self._get_cli_profile(str(payload.get("profile_name", "")))
-        confirmed = bool(payload.get("confirmed", False))
-        if not confirmed:
-            raise ValueError(
-                f"native assistant pack install requires explicit confirmation: {profile.name}"
-            )
 
         result = install_native_agent_pack(profile.name, plugin_root=str(PLUGIN_ROOT))
         return result.to_dict()
@@ -306,11 +296,6 @@ class Plugin:
         return await asyncio.to_thread(_fetch_plugin_update_plan, channel)
 
     async def update_plugin_to_latest(self, request: dict[str, Any]) -> dict[str, Any]:
-        payload = request or {}
-        confirmed = bool(payload.get("confirmed", False))
-        if not confirmed:
-            raise ValueError("plugin update requires explicit confirmation")
-
         channel = self._release_channel()
         plan = await asyncio.to_thread(_fetch_plugin_update_plan, channel)
         if plan["status"] == "up_to_date":
@@ -657,11 +642,10 @@ class Plugin:
         rows = _int_payload(payload, "rows", 24)
 
         self._sync_terminal_profiles()
-        # Validate the profile exists. The plugin does not gate launches by its
-        # own risk classification: command safety is delegated to the underlying
-        # CLI (Claude/Codex) and the user's explicit terminal input. The optional
-        # per-profile permission-bypass toggle still controls native no-approval
-        # launch args.
+        # Validate the profile exists. Risk classification is display metadata;
+        # command safety is delegated to the underlying CLI (Claude/Codex) and
+        # the user's explicit terminal input. The optional per-profile
+        # permission-bypass toggle still controls native no-approval launch args.
         self._get_cli_profile(profile_name)
 
         session = manager.start_session(profile_name, cols=cols, rows=rows)
@@ -675,8 +659,8 @@ class Plugin:
         rows = _int_payload(payload, "rows", 24)
 
         self._sync_terminal_profiles()
-        # Validate the profile exists; launches are not gated by plugin risk
-        # classification (see start_terminal_session).
+        # Validate the profile exists; risk classification is display metadata
+        # (see start_terminal_session).
         self._get_cli_profile(profile_name)
 
         session = manager.open_profile_session(profile_name, cols=cols, rows=rows)

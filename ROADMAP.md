@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-This roadmap is written for AI agents and human maintainers. Work phase-by-phase. Do not skip safety, source attribution, or resource-budget gates to ship UI faster.
+This roadmap is written for AI agents and human maintainers. Work phase-by-phase. Do not skip source attribution, credential boundaries, or resource-budget checks to ship UI faster.
 
 ## 0. Product Definition
 
@@ -11,7 +11,7 @@ Create a Decky plugin that gives Steam Deck users a local AI cockpit:
 - terminal access to existing AI CLIs in Gaming Mode;
 - assistant workflows specialized for Steam Deck troubleshooting and setup;
 - manageable knowledge packs from official docs, community repositories, and user-added sources;
-- explicit approval before local actions.
+- terminal-first access to CLI-owned local actions.
 
 ### Open-Source Distribution
 
@@ -24,7 +24,7 @@ Create a Decky plugin that gives Steam Deck users a local AI cockpit:
 | User | Need |
 | --- | --- |
 | Steam Deck power user | Run AI CLIs and terminal commands without leaving Gaming Mode. |
-| Non-Linux Deck user | Ask natural-language questions and approve safe fixes. |
+| Non-Linux Deck user | Ask natural-language questions and apply fixes through the active CLI. |
 | Open-source contributor | Add skills, knowledge packs, CLI adapters, or workflows. |
 | Advanced tinkerer | Connect custom agents, MCP servers, and private documentation. |
 
@@ -67,11 +67,11 @@ Reference projects:
 | Need | Use |
 | --- | --- |
 | Reusable procedural workflow | Agent Skill |
-| Live tools, local diagnostics, source search, Deck actions | MCP server |
+| Live tools, local diagnostics, source search, fix planning | MCP server |
 | Distribution bundle | Plugin/extension for each supported CLI |
 | Isolated role with different permissions/model/context | Custom agent/subagent |
 | Repeatable deterministic shortcut | Slash command/custom command |
-| Always-on guard around actions | Hook, but only where the target CLI supports it safely |
+| CLI-native command controls | The target CLI's own approval/sandbox settings |
 | Repo-specific durable instruction | `AGENTS.md`, `CLAUDE.md`, or target-native equivalent |
 
 ## 2. Target Architecture
@@ -81,13 +81,12 @@ Decky Plugin
   frontend/
     React + @decky/ui
     Terminal view using xterm.js
-    Assistant, Knowledge, Actions, Settings panels
+    Assistant, Knowledge, Settings panels
 
   backend/
     Python Decky backend
     PTY/session manager
     CLI adapter supervisor
-    Local action runner
     Settings and audit log
 
 deck-assistant-core
@@ -104,7 +103,6 @@ deck-assistant-mcp
   read_proton_logs
   get_storage_report
   propose_fix
-  run_approved_action
 
 agent-pack/
   skills/
@@ -141,7 +139,7 @@ Acceptance criteria:
 
 - Docs explain why default mode uses existing CLI auth instead of API keys.
 - Docs define what runs on Deck and what may run outside Deck.
-- Docs define risk levels before any action runner code exists.
+- Docs define risk levels as display metadata before workflows depend on them.
 
 ### Phase 2: Decky Terminal MVP
 
@@ -275,7 +273,7 @@ Acceptance criteria:
 Deliverables:
 
 - `deck-assistant-mcp` server.
-- Tools for knowledge, diagnostics, and approved actions.
+- Tools for knowledge, diagnostics, and fix planning.
 - MCP instructions with first 512 characters self-contained.
 - Config snippets for Codex and Claude.
 
@@ -289,14 +287,12 @@ Initial tools:
 | `read_proton_logs` | read_only | Locate and summarize Proton logs. |
 | `get_storage_report` | read_only | Show shader cache, compatdata, logs, screenshots/videos. |
 | `propose_fix` | read_only | Convert diagnosis into a plan and risk classification. |
-| `stage_action` | low_write | Prepare action for UI approval, no execution. |
-| `run_approved_action` | variable | Execute only actions approved in Decky UI. |
 
 Acceptance criteria:
 
 - Codex and Claude can connect to the MCP server using target-native config.
 - Tools expose stable JSON contracts.
-- Write tools cannot run without a Decky-side approval token.
+- Requested writes stay in the active CLI workflow.
 - Tool results are small, structured, and citation-aware.
 
 ### Phase 7: Assistant Mode
@@ -306,7 +302,7 @@ Deliverables:
 - Ask panel.
 - Current game context panel.
 - Diagnosis workflows.
-- Plan and approval UI.
+- Plan UI.
 
 Core workflows:
 
@@ -321,13 +317,13 @@ Agent tasks:
 1. Implement read-only diagnostics first.
 2. Add workflow prompts as Agent Skills, not hardcoded giant prompts.
 3. Route live data through MCP tools.
-4. Require approval for any local write.
+4. Show risk metadata for local writes while keeping execution in the active CLI terminal workflow.
 
 Acceptance criteria:
 
 - User can ask "why does this game not launch?" and receive cited local findings.
 - User can produce a system report without exposing tokens.
-- User sees exact commands/diffs before applying a fix.
+- User sees exact commands/diffs before applying a fix through the CLI.
 
 ### Phase 8: Agent Pack
 
@@ -346,7 +342,6 @@ Skills to create:
 | `deck-storage-doctor` | Low storage/cache cleanup | Find safe cleanup candidates. |
 | `deck-flatpak-doctor` | Heroic/Lutris/Bottles/permissions | Diagnose launcher/runtime issues. |
 | `deck-knowledge-curator` | Add/update sources | Validate licenses, chunking, citations. |
-| `deck-safe-action-review` | Before local writes | Review risk, rollback, approval text. |
 | `deck-report-builder` | Share diagnostics | Build sanitized support bundle. |
 
 Custom agents:
@@ -355,8 +350,6 @@ Custom agents:
 | --- | --- | --- |
 | `deck-planner` | read-only MCP, knowledge | Turn user request into a plan. |
 | `deck-diagnostician` | read-only local tools | Inspect logs, storage, versions, configs. |
-| `deck-safety-reviewer` | no write tools | Classify risk and require rollback plan. |
-| `deck-executor` | approved action tool only | Execute approved local action. |
 | `deck-knowledge-curator` | source manager tools | Add, update, and audit knowledge packs. |
 
 Acceptance criteria:
@@ -365,38 +358,21 @@ Acceptance criteria:
 - MCP config examples exist for Codex and Claude.
 - CLI-specific packaging is additive; core skill instructions stay portable.
 
-### Phase 9: Safe Action Runner
+### Phase 9: Assistant Apply UX
 
 Deliverables:
 
-- Declarative action schema.
-- Dry-run renderer.
-- Backup and rollback support.
-- Approval token flow.
-- Audit log.
-
-Action schema fields:
-
-```json
-{
-  "id": "uuid",
-  "title": "Human-readable action",
-  "risk": "read_only|low_write|high_write|danger",
-  "commands": [],
-  "file_edits": [],
-  "backups": [],
-  "rollback": [],
-  "requires_sudo": false,
-  "approved_by_user_at": null
-}
-```
+- Exact command/diff display in the Assistant UI.
+- Copy/send-to-terminal affordances for generated commands.
+- Clear risk labels for command groups.
+- Optional backup/rollback text when a skill can generate it.
 
 Acceptance criteria:
 
-- MCP cannot execute unstaged actions.
-- Decky UI approval is required for every write.
-- File edits create backups before mutation.
-- Dangerous actions require separate confirmation and are disabled by default.
+- MCP returns visible plans and risk metadata; it does not run write commands.
+- Decky UI keeps writes in the active terminal/CLI path.
+- File edits should expose exact scope and backup/rollback context when available.
+- Dangerous actions are labeled `danger`; the active CLI owns approval and sandbox behavior.
 
 ### Phase 10: Public Pack Registry
 
@@ -468,8 +444,8 @@ Hard requirements:
 | PTY | start/write/read/resize/interrupt/stop; TUI smoke tests. |
 | CLI adapters | installed/missing/logged-in/logged-out/custom command. |
 | Knowledge | chunking, dedupe, FTS results, citations, license metadata. |
-| MCP | schema validation, tool timeouts, approval enforcement. |
-| Action runner | dry-run, backup, rollback, risk classification, audit log. |
+| MCP | schema validation, tool timeouts, diagnostics, and fix-plan status. |
+| Runtime planning | exact commands/diffs, backup notes, rollback notes, and risk classification. |
 | Decky UI | Steam Deck viewport, controller navigation, no text overflow. |
 | Resource | idle CPU, memory, disk growth, indexing limits. |
 
@@ -479,15 +455,15 @@ Before public alpha:
 
 - Threat model checked into docs.
 - No token paths logged.
-- Audit log redacts secrets.
+- Diagnostics and logs redact secrets where they are displayed.
 - User-added sources are local-only by default.
 - No telemetry unless opt-in.
 - No cloud sync enabled by default.
-- Write actions impossible through MCP without Decky approval token.
+- MCP keeps requested writes in the active CLI workflow; the active CLI owns approval and sandbox behavior.
 
 Before plugin store submission:
 
-- Decky root flag absent unless a specific feature requires it.
+- Decky root flag may be present when runtime features require it.
 - Store/package rules verified against current Decky docs.
 - Dependencies and bundled binaries reviewed.
 - Large binary downloads avoided or hash-pinned.

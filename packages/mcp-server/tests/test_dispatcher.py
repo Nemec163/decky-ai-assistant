@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import unittest
 
 from deck_assistant_core import (
@@ -16,7 +15,6 @@ from deck_assistant_core import (
     SourceMetadata,
     SourceRevision,
     SourceType,
-    StagedActionStore,
     StorageReport,
     StorageReportItem,
     StorageReportSection,
@@ -28,7 +26,6 @@ from deck_assistant_mcp import (
     READ_ONLY_SHELL_WARNING,
     TOOL_CONTRACTS,
     create_in_process_tool_dispatcher,
-    export_tool_approval_summary,
 )
 from deck_assistant_mcp.dispatcher import InProcessToolDispatcher
 
@@ -40,8 +37,6 @@ EXPECTED_TOOL_ORDER = (
     "read_proton_logs",
     "get_storage_report",
     "propose_fix",
-    "stage_action",
-    "run_approved_action",
 )
 
 
@@ -55,10 +50,7 @@ class InProcessToolDispatcherTests(unittest.TestCase):
         exported_again = self.dispatcher.export_catalog()
 
         self.assertEqual(names, EXPECTED_TOOL_ORDER)
-        self.assertEqual(
-            tuple(tool["name"] for tool in exported["tools"]),
-            EXPECTED_TOOL_ORDER,
-        )
+        self.assertEqual(tuple(tool["name"] for tool in exported["tools"]), EXPECTED_TOOL_ORDER)
         self.assertEqual(exported, exported_again)
 
         exported["tools"][0]["input_schema"]["properties"]["query"]["minLength"] = 99
@@ -76,33 +68,14 @@ class InProcessToolDispatcherTests(unittest.TestCase):
         self.assertFalse(response["ok"])
         self.assertEqual(response["tool"], "missing_tool")
         self.assertEqual(response["error"]["code"], "unknown_tool")
-        self.assertEqual(
-            response["error"]["details"],
-            {"requested_tool": "missing_tool"},
-        )
+        self.assertEqual(response["error"]["details"], {"requested_tool": "missing_tool"})
 
     def test_input_validation_rejects_non_objects_missing_required_fields_and_unknown_keys(self) -> None:
         test_cases = (
-            (
-                [],
-                "$",
-                "expected object",
-            ),
-            (
-                {},
-                "$",
-                "missing required property query",
-            ),
-            (
-                {"query": "shader cache", "unexpected": True},
-                "$.unexpected",
-                "unexpected property",
-            ),
-            (
-                {"query": "shader cache", "source_ids": [""]},
-                "$.source_ids[0]",
-                "expected minLength 1",
-            ),
+            ([], "$", "expected object"),
+            ({}, "$", "missing required property query"),
+            ({"query": "shader cache", "unexpected": True}, "$.unexpected", "unexpected property"),
+            ({"query": "shader cache", "source_ids": [""]}, "$.source_ids[0]", "expected minLength 1"),
         )
 
         for arguments, path, reason in test_cases:
@@ -114,36 +87,12 @@ class InProcessToolDispatcherTests(unittest.TestCase):
                 self.assertEqual(response["error"]["details"]["path"], path)
                 self.assertEqual(response["error"]["details"]["reason"], reason)
 
-    def test_read_only_approval_metadata_export_is_stable(self) -> None:
-        summary = self.dispatcher.export_approval_summary()
-        metadata = self.dispatcher.get_tool_approval_metadata("stage_action")
-
-        self.assertEqual(summary, export_tool_approval_summary())
-        self.assertEqual(summary["groups"]["variable_risk_tools"], ["run_approved_action"])
-        self.assertEqual(
-            metadata,
-            {
-                "name": "stage_action",
-                "risk": "low_write",
-                "requires_approval": True,
-                "approval_gate": "decky_approval",
-                "read_only": False,
-                "variable_risk": False,
-            },
-        )
-
-        summary["tools"][0]["approval_gate"] = "mutated"
-
-        self.assertEqual(
-            self.dispatcher.export_approval_summary(),
-            export_tool_approval_summary(),
-        )
-
-    def test_read_only_calls_return_deterministic_placeholder_results(self) -> None:
+    def test_default_calls_return_deterministic_placeholder_results(self) -> None:
         search_response = self.dispatcher.dispatch_tool_call(
             "search_knowledge",
             {"query": "proton logs"},
         )
+        source_response = self.dispatcher.dispatch_tool_call("list_sources", {})
         inspect_response = self.dispatcher.dispatch_tool_call(
             "inspect_current_game",
             {"include_processes": False},
@@ -158,23 +107,24 @@ class InProcessToolDispatcherTests(unittest.TestCase):
         self.assertTrue(search_response["ok"])
         self.assertEqual(search_response["result"], {"results": []})
 
-        source_response = self.dispatcher.dispatch_tool_call("list_sources", {})
         self.assertTrue(source_response["ok"])
         self.assertEqual(source_response["result"], {"sources": []})
 
         self.assertTrue(inspect_response["ok"])
         self.assertEqual(inspect_response["result"]["game"], None)
-        self.assertEqual(
-            inspect_response["result"]["warnings"],
-            [READ_ONLY_SHELL_WARNING],
-        )
+        self.assertEqual(inspect_response["result"]["warnings"], [READ_ONLY_SHELL_WARNING])
 
         self.assertTrue(proposal_response["ok"])
         self.assertEqual(
-            proposal_response["result"]["proposal"]["risk"],
-            RiskLevel.READ_ONLY.value,
+            proposal_response["result"]["proposal"],
+            {
+                "title": "Manual review required",
+                "risk": RiskLevel.READ_ONLY.value,
+                "steps": [],
+                "commands": [],
+                "file_edits": [],
+            },
         )
-        self.assertFalse(proposal_response["result"]["proposal"]["requires_approval"])
 
         self.assertTrue(proton_response["ok"])
         self.assertEqual(proton_response["result"]["status"], DiagnosticStatus.UNAVAILABLE.value)
@@ -593,37 +543,23 @@ class InProcessToolDispatcherTests(unittest.TestCase):
         )
 
         self.assertTrue(response["ok"])
-        # The contract input caps excerpt characters; the dispatcher clamps the
-        # requested value down to the core reader's own excerpt limit.
         self.assertEqual(
             seen_kwargs,
             [{"max_excerpt_characters": MAX_PROTON_EXCERPT_CHARACTERS}],
         )
         self.assertEqual(response["result"]["status"], DiagnosticStatus.UNAVAILABLE.value)
 
-    def test_propose_fix_handler_accepts_inner_proposal_and_enforces_approval_invariants(self) -> None:
+    def test_propose_fix_handler_accepts_inner_proposal(self) -> None:
         seen_arguments = []
 
         def handler(arguments):
             seen_arguments.append(dict(arguments))
             return {
-                "title": "Stage shader cache cleanup for review",
+                "title": "Free shader cache space",
                 "risk": RiskLevel.LOW_WRITE.value,
-                "requires_approval": True,
-                "approval_gate": {
-                    "type": "approval_required",
-                    "summary": "Decky approval is required before local execution.",
-                    "requires_plan": True,
-                    "requires_exact_commands_or_diffs": False,
-                    "requires_backup_or_note": False,
-                    "requires_separate_confirmation": False,
-                    "may_execute_after_user_request": False,
-                },
-                "steps": ["Review cleanup candidates in Decky."],
-                "commands": [],
+                "steps": ["Review cleanup candidates in the active CLI."],
+                "commands": [{"argv": ["du", "-sh", "/tmp/cache"], "cwd": None}],
                 "file_edits": [],
-                "backups": [],
-                "rollback": [],
             }
 
         dispatcher = create_in_process_tool_dispatcher(
@@ -641,90 +577,10 @@ class InProcessToolDispatcherTests(unittest.TestCase):
             seen_arguments,
             [{"diagnosis": "Shader cache is large.", "requested_outcome": "free space"}],
         )
+        self.assertEqual(response["result"]["proposal"]["risk"], RiskLevel.LOW_WRITE.value)
         self.assertEqual(
-            response["result"]["proposal"]["risk"],
-            RiskLevel.LOW_WRITE.value,
-        )
-        self.assertTrue(response["result"]["proposal"]["requires_approval"])
-
-    def test_stage_action_records_pending_plan_without_releasing_approval_token(self) -> None:
-        token_factory_calls = []
-        store = StagedActionStore(
-            token_factory=lambda: token_factory_calls.append("called") or "approval-token",
-            timestamp_factory=lambda: "2026-06-21T13:00:00+00:00",
-        )
-        dispatcher = create_in_process_tool_dispatcher(
-            TOOL_CONTRACTS,
-            staged_action_store=store,
-        )
-
-        response = dispatcher.dispatch_tool_call(
-            "stage_action",
-            {
-                "action": {
-                    "title": "Create plugin config marker",
-                    "risk": RiskLevel.LOW_WRITE.value,
-                    "commands": [
-                        {
-                            "argv": ["touch", "/tmp/decky-ai-assistant-marker"],
-                        }
-                    ],
-                }
-            },
-        )
-
-        self.assertTrue(response["ok"])
-        result = response["result"]
-        self.assertEqual(result["risk"], RiskLevel.LOW_WRITE.value)
-        self.assertTrue(result["requires_approval"])
-        self.assertEqual(result["staged_at"], "2026-06-21T13:00:00+00:00")
-        self.assertIsNone(result["approved_at"])
-        self.assertEqual(result["staged_action_id"], result["display_plan"]["action_id"])
-        self.assertEqual(result["display_plan"]["summary"]["command_count"], 1)
-        self.assertEqual(
-            result["display_plan"]["commands"][0]["argv"],
-            ["touch", "/tmp/decky-ai-assistant-marker"],
-        )
-        self.assertNotIn("approval_token", json.dumps(result))
-        self.assertEqual(token_factory_calls, [])
-
-        staged = store.get_staged_action(
-            result["staged_action_id"],
-            expected_risk=RiskLevel.LOW_WRITE,
-        )
-        self.assertEqual(staged.title, "Create plugin config marker")
-
-    def test_stage_action_rejects_approval_unready_action(self) -> None:
-        store = StagedActionStore(
-            timestamp_factory=lambda: "2026-06-21T13:15:00+00:00",
-        )
-        dispatcher = create_in_process_tool_dispatcher(
-            TOOL_CONTRACTS,
-            staged_action_store=store,
-        )
-
-        response = dispatcher.dispatch_tool_call(
-            "stage_action",
-            {
-                "action": {
-                    "title": "Edit Steam config",
-                    "risk": RiskLevel.HIGH_WRITE.value,
-                    "file_edits": [
-                        {
-                            "path": "/home/deck/.steam/steam/config/config.vdf",
-                            "operation": "modify",
-                        }
-                    ],
-                }
-            },
-        )
-
-        self.assertFalse(response["ok"])
-        self.assertEqual(response["error"]["code"], "invalid_input")
-        self.assertEqual(response["error"]["details"]["path"], "$.action")
-        self.assertIn(
-            "needs an exact diff",
-            response["error"]["details"]["reason"],
+            response["result"]["proposal"]["commands"],
+            [{"argv": ["du", "-sh", "/tmp/cache"], "cwd": None}],
         )
 
     def test_invalid_injected_outputs_return_stable_errors(self) -> None:
@@ -756,27 +612,14 @@ class InProcessToolDispatcherTests(unittest.TestCase):
                 {"diagnosis": "Needs a plan."},
                 lambda _: {
                     "proposal": {
-                        "title": "Unsafe mismatch",
+                        "title": "Incomplete plan",
                         "risk": RiskLevel.LOW_WRITE.value,
-                        "requires_approval": False,
-                        "approval_gate": {
-                            "type": "approval_required",
-                            "summary": "Decky approval is required before local execution.",
-                            "requires_plan": True,
-                            "requires_exact_commands_or_diffs": False,
-                            "requires_backup_or_note": False,
-                            "requires_separate_confirmation": False,
-                            "may_execute_after_user_request": False,
-                        },
                         "steps": [],
                         "commands": [],
-                        "file_edits": [],
-                        "backups": [],
-                        "rollback": [],
                     }
                 },
-                "$.proposal.requires_approval",
-                f"expected True for risk {RiskLevel.LOW_WRITE.value}",
+                "$.proposal",
+                "missing required property file_edits",
             ),
         )
 
@@ -829,57 +672,13 @@ class InProcessToolDispatcherTests(unittest.TestCase):
                 knowledge_search_index=_empty_knowledge_index(),
             )
 
-    def test_write_and_variable_tools_are_explicitly_refused_without_executor(self) -> None:
-        stage_response = self.dispatcher.dispatch_tool_call(
-            "stage_action",
-            {
-                "action": {
-                    "title": "Create a backup",
-                    "risk": "low_write",
-                    "commands": [{"argv": ["mkdir", "-p", "/tmp/decky-ai-assistant"]}],
-                }
-            },
-        )
-        run_response = self.dispatcher.dispatch_tool_call(
-            "run_approved_action",
-            {
-                "staged_action_id": "action-123",
-                "approval_token": "approval-token",
-                "expected_risk": "low_write",
-            },
-        )
-
-        for tool_name, response, risk in (
-            ("stage_action", stage_response, "low_write"),
-            ("run_approved_action", run_response, "variable"),
-        ):
-            with self.subTest(tool=tool_name):
-                self.assertFalse(response["ok"])
-                self.assertEqual(response["tool"], tool_name)
-                self.assertEqual(response["error"]["code"], "tool_refused")
-                self.assertEqual(
-                    response["error"]["details"],
-                    {
-                        "risk": risk,
-                        "requires_approval": True,
-                        "approval_gate": "decky_approval",
-                    },
-                )
-
     def test_handler_catalog_alignment_holds_for_shipped_catalog(self) -> None:
         dispatcher = create_in_process_tool_dispatcher(TOOL_CONTRACTS)
 
         contract_names = {contract.name for contract in TOOL_CONTRACTS}
         handler_names = set(dispatcher._handlers)
 
-        # Every handler backs a real contract.
-        self.assertTrue(handler_names <= contract_names)
-        # Every non-approval-gated contract has a handler; approval-gated ones
-        # (run_approved_action) intentionally do not.
-        for contract in TOOL_CONTRACTS:
-            if not contract.requires_approval:
-                self.assertIn(contract.name, handler_names)
-        self.assertNotIn("run_approved_action", handler_names)
+        self.assertEqual(handler_names, contract_names)
 
     def test_handler_referencing_unknown_tool_fails_at_construction(self) -> None:
         class _DriftingDispatcher(InProcessToolDispatcher):
@@ -890,7 +689,7 @@ class InProcessToolDispatcherTests(unittest.TestCase):
         with self.assertRaisesRegex(ContractCatalogDriftError, "ghost_tool"):
             _DriftingDispatcher(TOOL_CONTRACTS)
 
-    def test_non_approval_contract_without_handler_fails_at_construction(self) -> None:
+    def test_contract_without_handler_fails_at_construction(self) -> None:
         class _DroppingDispatcher(InProcessToolDispatcher):
             def _assert_handler_catalog_alignment(self) -> None:
                 self._handlers.pop("get_storage_report", None)
@@ -898,53 +697,6 @@ class InProcessToolDispatcherTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ContractCatalogDriftError, "get_storage_report"):
             _DroppingDispatcher(TOOL_CONTRACTS)
-
-    def test_stage_action_any_of_requires_commands_or_file_edits(self) -> None:
-        store = StagedActionStore(
-            timestamp_factory=lambda: "2026-06-21T13:30:00+00:00",
-        )
-        dispatcher = create_in_process_tool_dispatcher(
-            TOOL_CONTRACTS,
-            staged_action_store=store,
-        )
-
-        # Neither commands nor file_edits -> anyOf presence check fails.
-        missing = dispatcher.dispatch_tool_call(
-            "stage_action",
-            {"action": {"title": "Nothing to do", "risk": RiskLevel.LOW_WRITE.value}},
-        )
-        self.assertFalse(missing["ok"])
-        self.assertEqual(missing["error"]["code"], "invalid_input")
-        self.assertEqual(missing["error"]["details"]["path"], "$.action")
-        self.assertIn("commands", missing["error"]["details"]["reason"])
-        self.assertIn("file_edits", missing["error"]["details"]["reason"])
-
-        # Only file_edits present -> anyOf is satisfied (commands not required).
-        edits_only = dispatcher.dispatch_tool_call(
-            "stage_action",
-            {
-                "action": {
-                    "title": "Stage a temporary marker edit",
-                    "risk": RiskLevel.LOW_WRITE.value,
-                    "file_edits": [
-                        {
-                            "path": "/tmp/decky-ai-assistant-marker",
-                            "operation": "create",
-                            "temporary": True,
-                        }
-                    ],
-                }
-            },
-        )
-        self.assertTrue(edits_only["ok"])
-        self.assertEqual(
-            edits_only["result"]["display_plan"]["summary"]["file_edit_count"],
-            1,
-        )
-        self.assertEqual(
-            edits_only["result"]["display_plan"]["summary"]["command_count"],
-            0,
-        )
 
 
 def _empty_knowledge_index():

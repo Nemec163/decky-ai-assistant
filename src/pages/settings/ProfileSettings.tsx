@@ -107,7 +107,6 @@ export function ProfileSettings() {
       const result = await openCliSetupAction({
         profile_name: selectedProfile.name,
         action,
-        confirmed: true,
         cols: DEFAULT_TERMINAL_COLS,
         rows: DEFAULT_TERMINAL_ROWS,
       });
@@ -129,7 +128,6 @@ export function ProfileSettings() {
     try {
       const result = await installAgentPack({
         profile_name: selectedProfile.name,
-        confirmed: true,
       });
       setAgentPackPlan(result.plan);
       setAgentPackResult(result);

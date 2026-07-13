@@ -19,7 +19,7 @@ from deck_assistant_core.cli import (
     managed_cli_profile_workspace_dir,
     managed_cli_user_home,
 )
-from deck_assistant_core.risk import ApprovalRequirement, RiskLevel
+from deck_assistant_core.risk import RiskLevel
 
 
 AGENT_PACK_PLUGIN_NAME = "decky-ai-assistant"
@@ -31,19 +31,13 @@ _RUNTIME_SKILL_NAMES = (
     "deck-storage-doctor",
     "deck-flatpak-doctor",
     "deck-knowledge-curator",
-    "deck-safe-action-review",
 )
 _CLAUDE_GLOBAL_AGENT_NAMES = (
     "deck-planner.md",
     "deck-diagnostician.md",
-    "deck-safety-reviewer.md",
-    "deck-executor.md",
     "deck-knowledge-curator.md",
 )
-_CLAUDE_GLOBAL_COMMAND_NAMES = (
-    "diagnose-runtime.md",
-    "stage-safe-action.md",
-)
+_CLAUDE_GLOBAL_COMMAND_NAMES = ("diagnose-runtime.md",)
 _MCP_SERVER_NAME = "deck-assistant"
 
 
@@ -72,10 +66,6 @@ class NativeAgentPackInstallPlan:
     write_paths: tuple[str, ...] = ()
     message: str = ""
 
-    @property
-    def approval_requirement(self) -> ApprovalRequirement:
-        return ApprovalRequirement.for_risk(self.risk)
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "target": self.target,
@@ -85,7 +75,6 @@ class NativeAgentPackInstallPlan:
             "source_dir": self.source_dir,
             "install_dir": self.install_dir,
             "write_paths": list(self.write_paths),
-            "approval_requirement": self.approval_requirement.to_dict(),
             "message": self.message,
         }
 
@@ -187,8 +176,8 @@ def install_native_agent_pack(
 
     _replace_managed_directory(
         install_dir,
-        lambda staging_dir: _populate_target_plugin_tree(
-            staging_dir,
+        lambda temp_dir: _populate_target_plugin_tree(
+            temp_dir,
             source_dir=source_dir,
             plugin_root=Path(plugin_root),
             target=target_id,
@@ -269,7 +258,7 @@ def _populate_target_plugin_tree(
                 "mcpServers": "./.mcp.json",
                 "interface": {
                     "displayName": AGENT_PACK_DISPLAY_NAME,
-                    "shortDescription": "Steam Deck diagnostics and safe local actions.",
+                    "shortDescription": "Steam Deck diagnostics for terminal-first AI CLIs.",
                     "category": "Productivity",
                     "capabilities": ["Read"],
                     "brandColor": "#10A37F",
@@ -314,9 +303,9 @@ def _install_global_skills(
         target_skill = skills_root / skill_name
         _replace_managed_directory(
             target_skill,
-            lambda staging_dir, source_skill=source_skill: shutil.copytree(
+            lambda temp_dir, source_skill=source_skill: shutil.copytree(
                 source_skill,
-                staging_dir,
+                temp_dir,
                 dirs_exist_ok=True,
             ),
         )
@@ -434,8 +423,8 @@ def _install_claude_workspace_runtime(
     Claude Code launches from this workspace, so a project `CLAUDE.md` frames the
     session as the Deck assistant and a project `.mcp.json` registers the bundled
     `deck-assistant` MCP server. A project `settings.local.json` pre-enables that
-    server so the launched CLI gains the Deck tool catalog without a manual
-    approval prompt. All three are managed files and never overwrite user copies.
+    server so the launched CLI gains the Deck tool catalog immediately. All three
+    are managed files and never overwrite user copies.
     """
 
     workspace = _claude_workspace_path(home, explicit_home=explicit_home)
@@ -501,21 +490,20 @@ def _codex_runtime_persona() -> str:
         "- `search_knowledge`, `list_sources` — cited answers from local knowledge packs.\n"
         "- `inspect_current_game` — selected/current Steam app context.\n"
         "- `read_proton_logs`, `get_storage_report` — bounded read-only Deck diagnostics.\n"
-        "- `propose_fix` — turn evidence into a reviewable plan with a risk level.\n"
-        "- `stage_action` — stage a write as an approval-ready record; it never executes.\n"
-        "- `run_approved_action` — runs only an action already approved in the Decky UI.\n"
+        "- `propose_fix` — turn evidence into a concise fix plan with a risk level.\n"
         "\n"
-        "Use the installed `deck-*` skills for diagnosis, storage, Flatpak, knowledge, "
-        "and safe-action review workflows.\n"
+        "Use the installed `deck-*` skills for diagnosis, storage, Flatpak, and "
+        "knowledge workflows. For requested fixes, use the active CLI's normal "
+        "shell/tooling; Decky does not execute those fixes separately.\n"
         "\n"
-        "## Safety model\n"
+        "## Risk model\n"
         "\n"
-        "- Read-only is the default. Answer Deck questions with diagnostics and citations first.\n"
+        "- Prefer diagnostics and citations first when they answer the Deck question.\n"
         "- Classify every local change: `read_only`, `low_write`, `high_write`, or `danger`.\n"
-        "- Never execute writes directly. Stage them and let the Decky UI approve them.\n"
+        "- Execute requested fixes when the active CLI allows it; Decky does not add extra prompts outside the CLI.\n"
         "- For dangerous commands (`sudo`, `rm`, `pacman`, `systemctl`, `chmod`, "
         "readonly-partition changes) show the exact command and a rollback note; "
-        "never hide them behind natural-language approval text.\n"
+        "never hide them behind vague natural-language text.\n"
         "- Never read, print, copy, or upload AI CLI auth tokens or credential stores.\n"
         "- Do not run background scans or indexing unless the user explicitly asks.\n"
         "\n"
@@ -553,7 +541,6 @@ def _codex_workspace_mcp_config(plugin_root: Path) -> str:
         'args = ["-m", "deck_assistant_mcp", "serve"]\n'
         "enabled = true\n"
         "tool_timeout_sec = 60\n"
-        'default_tools_approval_mode = "prompt"\n'
         "\n"
         f"[mcp_servers.{server_key}.env]\n"
         f"PYTHONPATH = {_toml_string(python_path)}\n"
@@ -579,21 +566,20 @@ def _claude_runtime_persona() -> str:
         "- `search_knowledge`, `list_sources` — cited answers from local knowledge packs.\n"
         "- `inspect_current_game` — selected/current Steam app context.\n"
         "- `read_proton_logs`, `get_storage_report` — bounded read-only Deck diagnostics.\n"
-        "- `propose_fix` — turn evidence into a reviewable plan with a risk level.\n"
-        "- `stage_action` — stage a write as an approval-ready record; it never executes.\n"
-        "- `run_approved_action` — runs only an action already approved in the Decky UI.\n"
+        "- `propose_fix` — turn evidence into a concise fix plan with a risk level.\n"
         "\n"
         "Use the installed `deck-*` skills, subagents, and slash commands for "
-        "diagnosis, storage, Flatpak, knowledge, and safe-action review workflows.\n"
+        "diagnosis, storage, Flatpak, and knowledge workflows. For requested fixes, "
+        "use the active CLI's normal shell/tooling; Decky does not execute those fixes separately.\n"
         "\n"
-        "## Safety model\n"
+        "## Risk model\n"
         "\n"
-        "- Read-only is the default. Answer Deck questions with diagnostics and citations first.\n"
+        "- Prefer diagnostics and citations first when they answer the Deck question.\n"
         "- Classify every local change: `read_only`, `low_write`, `high_write`, or `danger`.\n"
-        "- Never execute writes directly. Stage them and let the Decky UI approve them.\n"
+        "- Execute requested fixes when the active CLI allows it; Decky does not add extra prompts outside the CLI.\n"
         "- For dangerous commands (`sudo`, `rm`, `pacman`, `systemctl`, `chmod`, "
         "readonly-partition changes) show the exact command and a rollback note; "
-        "never hide them behind natural-language approval text.\n"
+        "never hide them behind vague natural-language text.\n"
         "- Never read, print, copy, or upload AI CLI auth tokens or credential stores.\n"
         "- Do not run background scans or indexing unless the user explicitly asks.\n"
         "\n"
@@ -686,13 +672,13 @@ def _toml_string(value: str) -> str:
 
 def _replace_managed_path(
     destination: Path,
-    write_staging: Callable[[Path], None],
+    write_temp: Callable[[Path], None],
     *,
     target: str,
 ) -> None:
     """Atomically replace one managed file, refusing to clobber user copies.
 
-    ``write_staging`` produces the new file contents at the given staging path;
+    ``write_temp`` produces the new file contents at the given temporary path;
     the only difference between a file copy and a text write is this callback.
     """
 
@@ -700,23 +686,23 @@ def _replace_managed_path(
     if destination.exists() and not _is_managed_file(destination):
         raise NativeAgentPackError(f"refusing to overwrite unmanaged file: {destination}")
 
-    staging_path = destination.parent / f".{destination.name}.tmp"
-    if staging_path.exists():
-        staging_path.unlink()
+    temp_path = destination.parent / f".{destination.name}.tmp"
+    if temp_path.exists():
+        temp_path.unlink()
     try:
-        write_staging(staging_path)
-        staging_path.replace(destination)
+        write_temp(temp_path)
+        temp_path.replace(destination)
         _write_file_marker(destination, target)
     except Exception:
-        if staging_path.exists():
-            staging_path.unlink()
+        if temp_path.exists():
+            temp_path.unlink()
         raise
 
 
 def _replace_managed_file(destination: Path, source: Path, *, target: str) -> None:
     _replace_managed_path(
         destination,
-        lambda staging_path: shutil.copy2(source, staging_path),
+        lambda temp_path: shutil.copy2(source, temp_path),
         target=target,
     )
 
@@ -724,7 +710,7 @@ def _replace_managed_file(destination: Path, source: Path, *, target: str) -> No
 def _replace_managed_text(destination: Path, content: str, *, target: str) -> None:
     _replace_managed_path(
         destination,
-        lambda staging_path: staging_path.write_text(content, encoding="utf-8"),
+        lambda temp_path: temp_path.write_text(content, encoding="utf-8"),
         target=target,
     )
 
@@ -737,18 +723,18 @@ def _replace_managed_directory(
     if destination.exists() and not _is_managed_directory(destination):
         raise NativeAgentPackError(f"refusing to overwrite unmanaged directory: {destination}")
 
-    staging_dir = destination.parent / f".{destination.name}.tmp"
-    if staging_dir.exists():
-        shutil.rmtree(staging_dir)
-    staging_dir.mkdir(parents=True)
+    temp_dir = destination.parent / f".{destination.name}.tmp"
+    if temp_dir.exists():
+        shutil.rmtree(temp_dir)
+    temp_dir.mkdir(parents=True)
     try:
-        populate(staging_dir)
+        populate(temp_dir)
         if destination.exists():
             shutil.rmtree(destination)
-        staging_dir.replace(destination)
+        temp_dir.replace(destination)
     except Exception:
-        if staging_dir.exists():
-            shutil.rmtree(staging_dir)
+        if temp_dir.exists():
+            shutil.rmtree(temp_dir)
         raise
 
 
@@ -910,8 +896,8 @@ def _count_written_paths(paths: Iterable[Path]) -> tuple[int, int]:
 
     Each top-level write path is resolved once; nested entries are deduped by
     their absolute walked path. These counts are reported in the install result
-    for the UI only and never gate a safety decision, so resolving symlinks per
-    node (the previous behavior) is unnecessary work on a freshly written tree.
+    for the UI only, so resolving symlinks per node (the previous behavior) is
+    unnecessary work on a freshly written tree.
     """
 
     files: set[str] = set()

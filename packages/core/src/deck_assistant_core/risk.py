@@ -1,18 +1,13 @@
 """Risk classification primitives for local Deck actions.
 
-This module deliberately classifies conservatively. It is safer for an action to
-require approval than for an opaque command to be treated as read-only.
+Risk is informational metadata for UI and CLI context. CLI sessions use these
+labels for display only.
 """
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
-from dataclasses import dataclass
+from collections.abc import Sequence
 from enum import Enum
-
-
-class PolicyViolation(ValueError):
-    """Raised when a proposed action is outside the permitted safety model."""
 
 
 class RiskLevel(str, Enum):
@@ -30,72 +25,6 @@ _RISK_ORDER = {
     RiskLevel.HIGH_WRITE: 2,
     RiskLevel.DANGER: 3,
 }
-
-
-@dataclass(frozen=True)
-class ApprovalRequirement:
-    """Approval UI requirements implied by a risk level."""
-
-    risk: RiskLevel
-    requires_plan: bool
-    requires_exact_commands_or_diffs: bool
-    requires_backup_or_note: bool
-    requires_separate_confirmation: bool
-    may_execute_after_user_request: bool
-
-    @classmethod
-    def for_risk(cls, risk: RiskLevel) -> "ApprovalRequirement":
-        if risk is RiskLevel.READ_ONLY:
-            return cls(
-                risk=risk,
-                requires_plan=False,
-                requires_exact_commands_or_diffs=False,
-                requires_backup_or_note=False,
-                requires_separate_confirmation=False,
-                may_execute_after_user_request=True,
-            )
-        if risk is RiskLevel.LOW_WRITE:
-            return cls(
-                risk=risk,
-                requires_plan=True,
-                requires_exact_commands_or_diffs=False,
-                requires_backup_or_note=False,
-                requires_separate_confirmation=False,
-                may_execute_after_user_request=False,
-            )
-        if risk is RiskLevel.HIGH_WRITE:
-            return cls(
-                risk=risk,
-                requires_plan=True,
-                requires_exact_commands_or_diffs=True,
-                requires_backup_or_note=True,
-                requires_separate_confirmation=False,
-                may_execute_after_user_request=False,
-            )
-        return cls(
-            risk=risk,
-            requires_plan=True,
-            requires_exact_commands_or_diffs=True,
-            requires_backup_or_note=True,
-            requires_separate_confirmation=True,
-            may_execute_after_user_request=False,
-        )
-
-    def to_dict(self) -> dict[str, object]:
-        """Return the canonical approval-requirement JSON shape.
-
-        This is the single source of truth for the ``approval_requirement``
-        block embedded in every plan ``to_dict`` across the codebase.
-        """
-
-        return {
-            "risk": self.risk.value,
-            "requires_plan": self.requires_plan,
-            "requires_exact_commands_or_diffs": self.requires_exact_commands_or_diffs,
-            "requires_backup_or_note": self.requires_backup_or_note,
-            "requires_separate_confirmation": self.requires_separate_confirmation,
-            "may_execute_after_user_request": self.may_execute_after_user_request,
-        }
 
 
 _READ_ONLY_COMMANDS = {
@@ -167,22 +96,6 @@ _DANGER_COMMANDS = {
 
 _SHELL_EXECUTORS = {"bash", "dash", "fish", "sh", "zsh"}
 
-_CREDENTIAL_SEGMENTS = {
-    ".aws",
-    ".codex",
-    ".config/codex",
-    ".gemini",
-    ".gnupg",
-    ".netrc",
-    ".ssh",
-    "credentials",
-    "credentials.json",
-    "secrets",
-    "token",
-    "tokens",
-    "tokens.json",
-}
-
 _SYSTEM_PATH_PREFIXES = (
     "/boot",
     "/dev",
@@ -218,15 +131,13 @@ def classify_command(argv: Sequence[str] | str) -> RiskLevel:
     """Classify a structured command without executing it.
 
     Shell command strings and shell executors are classified as danger because
-    they hide the actual operation from the approval renderer.
+    they hide the actual operation from display metadata.
     """
 
     if isinstance(argv, str):
         return RiskLevel.DANGER
     if not argv:
         raise ValueError("command argv must not be empty")
-
-    _reject_credential_paths(argv)
 
     executable = _basename(argv[0]).lower()
     args = [part.lower() for part in argv[1:]]
@@ -268,7 +179,6 @@ def classify_file_edit(path: str, operation: str, *, temporary: bool = False) ->
     """Classify a proposed file operation."""
 
     normalized = _normalize_path(path)
-    _reject_credential_paths([normalized])
     op = operation.lower()
 
     if op in {"read", "inspect"}:
@@ -366,16 +276,6 @@ def _classify_ai_cli(executable: str, args: Sequence[str]) -> RiskLevel:
     if executable == "codex" and args[:2] == ["login", "status"]:
         return RiskLevel.READ_ONLY
     return RiskLevel.HIGH_WRITE
-
-
-def _reject_credential_paths(values: Iterable[str]) -> None:
-    for value in values:
-        normalized = _normalize_path(value)
-        segments = [segment for segment in normalized.split("/") if segment]
-        if any(segment in _CREDENTIAL_SEGMENTS for segment in segments):
-            raise PolicyViolation("credential or secret paths are not allowed in actions")
-        if "/.config/codex/" in normalized:
-            raise PolicyViolation("AI CLI credential paths are not allowed in actions")
 
 
 def _basename(value: str) -> str:

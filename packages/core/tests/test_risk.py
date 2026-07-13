@@ -3,7 +3,6 @@ from __future__ import annotations
 import unittest
 
 from deck_assistant_core import (
-    PolicyViolation,
     RiskLevel,
     classify_command,
     classify_file_edit,
@@ -77,12 +76,15 @@ class RiskClassificationTests(unittest.TestCase):
         )
         self.assertEqual(classify_file_edit("/tmp/user-file.txt", "delete"), RiskLevel.DANGER)
 
-    def test_credential_paths_are_rejected(self) -> None:
-        with self.assertRaises(PolicyViolation):
-            classify_file_edit("/home/deck/.config/codex/auth.json", "read")
-
-        with self.assertRaises(PolicyViolation):
-            classify_command(["cat", "/home/deck/.ssh/id_ed25519"])
+    def test_credential_like_paths_are_classified_as_display_metadata(self) -> None:
+        self.assertEqual(
+            classify_file_edit("/home/deck/.config/codex/auth.json", "read"),
+            RiskLevel.READ_ONLY,
+        )
+        self.assertEqual(
+            classify_command(["cat", "/home/deck/.ssh/id_ed25519"]),
+            RiskLevel.READ_ONLY,
+        )
 
     def test_max_risk_returns_highest_level(self) -> None:
         self.assertEqual(

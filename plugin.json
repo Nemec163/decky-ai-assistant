@@ -1,7 +1,7 @@
 {
   "name": "Decky AI Assistant",
   "author": "nmc",
-  "flags": [],
+  "flags": ["root"],
   "api_version": 1,
   "publish": {
     "tags": ["ai", "assistant", "terminal", "steam-deck"],

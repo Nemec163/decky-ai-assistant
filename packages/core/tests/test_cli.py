@@ -222,11 +222,6 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(plan.path, "/home/deck/.local/bin/codex")
         self.assertEqual(plan.argv, ("/home/deck/.local/bin/codex",))
         self.assertEqual(plan.risk, RiskLevel.READ_ONLY)
-        self.assertFalse(plan.approval_requirement.requires_plan)
-        self.assertFalse(plan.approval_requirement.requires_exact_commands_or_diffs)
-        self.assertFalse(plan.approval_requirement.requires_backup_or_note)
-        self.assertFalse(plan.approval_requirement.requires_separate_confirmation)
-        self.assertTrue(plan.approval_requirement.may_execute_after_user_request)
 
     def test_launch_plan_for_custom_profile_preserves_structured_argv(self) -> None:
         profile = CliProfile.from_custom_command(
@@ -244,7 +239,6 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(plan.profile_type, "custom")
         self.assertEqual(plan.argv, ("/usr/bin/find", "/tmp", "-maxdepth", "1"))
         self.assertEqual(plan.risk, RiskLevel.READ_ONLY)
-        self.assertTrue(plan.approval_requirement.may_execute_after_user_request)
 
     def test_launch_plan_reports_missing_executable_without_probe_or_launch(self) -> None:
         seen: list[str] = []
@@ -289,8 +283,6 @@ class CliContractTests(unittest.TestCase):
             plan.argv[2].index("executable=codex"),
             plan.argv[2].index('managed_executable="$bin_dir/$executable"'),
         )
-        self.assertTrue(plan.approval_requirement.requires_plan)
-        self.assertFalse(plan.approval_requirement.may_execute_after_user_request)
 
     def test_cli_setup_auth_plan_launches_existing_cli_auth_flow(self) -> None:
         plan = plan_cli_setup_action(
@@ -333,11 +325,6 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(plan.status, CliLaunchStatus.READY)
         self.assertEqual(plan.argv, ("/bin/bash", "-lc", "pwd"))
         self.assertEqual(plan.risk, RiskLevel.DANGER)
-        self.assertTrue(plan.approval_requirement.requires_plan)
-        self.assertTrue(plan.approval_requirement.requires_exact_commands_or_diffs)
-        self.assertTrue(plan.approval_requirement.requires_backup_or_note)
-        self.assertTrue(plan.approval_requirement.requires_separate_confirmation)
-        self.assertFalse(plan.approval_requirement.may_execute_after_user_request)
 
     def test_detect_missing_cli_does_not_run_probe(self) -> None:
         calls: list[tuple[str, ...]] = []
@@ -501,8 +488,6 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(plan.risk, RiskLevel.DANGER)
         self.assertTrue(plan.enabled)
         self.assertEqual(plan.bypass_args, ("--dangerously-bypass-approvals-and-sandbox",))
-        self.assertTrue(plan.approval_requirement.requires_separate_confirmation)
-        self.assertFalse(plan.approval_requirement.may_execute_after_user_request)
         self.assertIn("native no-approval", plan.message)
 
     def test_apply_permission_bypass_adds_known_cli_args(self) -> None:
@@ -647,21 +632,14 @@ class CliContractTests(unittest.TestCase):
                 argv="bash -lc pwd",
             )
 
-    def test_custom_profile_exposes_risk_and_approval_posture(self) -> None:
+    def test_custom_profile_exposes_risk(self) -> None:
         profile = CliProfile.from_custom_command(
             name="custom-touch",
             display_name="Custom Touch",
             argv=["touch", "/tmp/decky-ai-assistant-test"],
         )
 
-        approval = profile.approval_requirement
-
         self.assertEqual(profile.risk, RiskLevel.LOW_WRITE)
-        self.assertTrue(approval.requires_plan)
-        self.assertFalse(approval.requires_exact_commands_or_diffs)
-        self.assertFalse(approval.requires_backup_or_note)
-        self.assertFalse(approval.requires_separate_confirmation)
-        self.assertFalse(approval.may_execute_after_user_request)
 
     def test_custom_profile_round_trips_through_dict(self) -> None:
         profile = CliProfile.from_custom_command(

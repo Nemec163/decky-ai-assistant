@@ -41,11 +41,6 @@ def _load_validator():
     return module
 
 
-# The validator caps the variable-risk execution tool at the highest supported
-# risk; the canonical catalog labels it "variable". Map it for comparison.
-_RISK_CAP = {"variable": "danger"}
-
-
 class ValidatorToolRiskAgreementTest(unittest.TestCase):
     def test_validator_table_matches_tool_contracts(self) -> None:
         validator = _load_validator()
@@ -53,7 +48,7 @@ class ValidatorToolRiskAgreementTest(unittest.TestCase):
 
         validator_table = dict(validator.MCP_TOOL_RISKS)
         contract_table = {
-            contract.name: _RISK_CAP.get(contract.risk.value, contract.risk.value)
+            contract.name: contract.risk.value
             for contract in TOOL_CONTRACTS
         }
 

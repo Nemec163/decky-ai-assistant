@@ -1,6 +1,6 @@
-# Runtime Contract Reference
+# Runtime Contract
 
-## Tool Order
+## Tools
 
 1. `search_knowledge`
 2. `list_sources`
@@ -8,23 +8,16 @@
 4. `read_proton_logs`
 5. `get_storage_report`
 6. `propose_fix`
-7. `stage_action`
-8. `run_approved_action`
 
-Use tools 1-6 from diagnosis and planning roles. Use `stage_action` only after risk review and only from a context allowed to use `action_staging`. Use `run_approved_action` only from `deck-executor` with a Decky approval token.
+Use tools 1-5 for evidence and tool 6 for concise planning. Requested writes run through the active CLI's normal shell/tooling.
 
-## Evidence Rules
+## Redaction
 
-- Keep tool results structured and short.
-- Prefer source IDs, citations, revisions, and license metadata over copied source text.
 - Redact tokens, session IDs, API keys, OAuth artifacts, cookies, and full auth paths.
-- Include enough local path context for the user to act, but do not expose unrelated private data.
+- Preserve enough path context for the user to recognize game, launcher, and storage locations.
 
-## Runtime Locking
+## Fix Plans
 
-- A staged action has one owner role and one action ID.
-- A role handoff must include goal, evidence, risk, exact write scope when relevant, staged action ID if any, next allowed role, and blocked condition.
-- Staging output should include `staged_action_id`, `risk`, `requires_approval`, and `display_plan`, not the approval token.
-- Decky approval flow controls approval-token release.
-- Executor must compare the approved action ID, expected risk, and command/file-edit list before running.
-- Failed actions return sanitized stderr/stdout summaries and rollback status.
+- A handoff should include goal, evidence, risk, exact write scope when relevant, next role when useful, and blocked condition.
+- Planning output should include `title`, `risk`, `steps`, `commands`, and `file_edits`.
+- Applied fixes are handled by the active CLI and should keep exact command context visible.

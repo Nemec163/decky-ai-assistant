@@ -118,7 +118,7 @@ class McpStdioServerTests(unittest.TestCase):
         self.assertFalse(result["isError"])
         self.assertIn("sections", result["structuredContent"])
 
-    def test_tools_call_execution_tool_is_refused(self) -> None:
+    def test_tools_call_unknown_tool_returns_structured_error(self) -> None:
         responses = _run_messages(
             [
                 {
@@ -126,12 +126,8 @@ class McpStdioServerTests(unittest.TestCase):
                     "id": 5,
                     "method": "tools/call",
                     "params": {
-                        "name": "run_approved_action",
-                        "arguments": {
-                            "staged_action_id": "missing",
-                            "approval_token": "nope",
-                            "expected_risk": "danger",
-                        },
+                        "name": "missing_tool",
+                        "arguments": {},
                     },
                 }
             ]
@@ -140,7 +136,7 @@ class McpStdioServerTests(unittest.TestCase):
         result = responses[0]["result"]
         self.assertTrue(result["isError"])
         payload = json.loads(result["content"][0]["text"])
-        self.assertEqual(payload["code"], "tool_refused")
+        self.assertEqual(payload["code"], "unknown_tool")
 
     def test_unknown_method_returns_method_not_found(self) -> None:
         responses = _run_messages(
@@ -255,8 +251,7 @@ class McpStdioServerTests(unittest.TestCase):
         self.assertIsNone(response["id"])
         self.assertEqual(response["error"]["code"], -32600)
 
-    def test_batch_refuses_execution_tool_while_serving_other_calls(self) -> None:
-        # A batch must still honor the hard refusal of approval-gated execution.
+    def test_batch_reports_unknown_tool_while_serving_other_calls(self) -> None:
         batch = json.dumps(
             [
                 {"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
@@ -265,12 +260,8 @@ class McpStdioServerTests(unittest.TestCase):
                     "id": 2,
                     "method": "tools/call",
                     "params": {
-                        "name": "run_approved_action",
-                        "arguments": {
-                            "staged_action_id": "missing",
-                            "approval_token": "nope",
-                            "expected_risk": "danger",
-                        },
+                        "name": "missing_tool",
+                        "arguments": {},
                     },
                 },
             ]
@@ -279,10 +270,10 @@ class McpStdioServerTests(unittest.TestCase):
         responses = _run_raw_lines([batch])[0]
         by_id = {response["id"]: response for response in responses}
         self.assertIn("tools", by_id[1]["result"])
-        refused = by_id[2]["result"]
-        self.assertTrue(refused["isError"])
-        payload = json.loads(refused["content"][0]["text"])
-        self.assertEqual(payload["code"], "tool_refused")
+        failed = by_id[2]["result"]
+        self.assertTrue(failed["isError"])
+        payload = json.loads(failed["content"][0]["text"])
+        self.assertEqual(payload["code"], "unknown_tool")
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ from dataclasses import dataclass, replace
 from enum import Enum
 from typing import Any
 
-from deck_assistant_core.risk import ApprovalRequirement, RiskLevel, classify_command
+from deck_assistant_core.risk import RiskLevel, classify_command
 
 
 class CliProfileError(ValueError):
@@ -243,12 +243,6 @@ class CliProfile:
 
         return _classify_terminal_launch(self, self.launch_argv())
 
-    @property
-    def approval_requirement(self) -> ApprovalRequirement:
-        """Return the approval posture implied by the launch command risk."""
-
-        return ApprovalRequirement.for_risk(self.risk)
-
     def to_dict(self) -> dict[str, Any]:
         data: dict[str, Any] = {
             "name": self.name,
@@ -352,7 +346,6 @@ class CliLaunchPlan:
     status: CliLaunchStatus
     argv: tuple[str, ...]
     risk: RiskLevel
-    approval_requirement: ApprovalRequirement
     path: str | None = None
     error: str | None = None
     message: str = ""
@@ -367,7 +360,6 @@ class CliLaunchPlan:
             "path": self.path,
             "argv": list(self.argv),
             "risk": self.risk.value,
-            "approval_requirement": self.approval_requirement.to_dict(),
             "error": self.error,
             "message": self.message,
         }
@@ -383,7 +375,6 @@ class CliSetupPlan:
     status: CliSetupStatus
     argv: tuple[str, ...]
     risk: RiskLevel
-    approval_requirement: ApprovalRequirement
     npm_package: str | None = None
     install_prefix: str | None = None
     bin_dir: str | None = None
@@ -400,7 +391,6 @@ class CliSetupPlan:
             "status": self.status.value,
             "argv": list(self.argv),
             "risk": self.risk.value,
-            "approval_requirement": self.approval_requirement.to_dict(),
             "npm_package": self.npm_package,
             "install_prefix": self.install_prefix,
             "bin_dir": self.bin_dir,
@@ -466,7 +456,6 @@ class CliProfileHealth:
             "launch_status": self.launch_plan.status.value,
             "argv": launch_plan["argv"],
             "risk": self.launch_plan.risk.value,
-            "approval_requirement": launch_plan["approval_requirement"],
             "can_launch": self.can_launch,
             "needs_login": self.needs_login,
             "messages": list(self.messages),
@@ -478,7 +467,7 @@ class CliProfileHealth:
 
 @dataclass(frozen=True)
 class CliPermissionBypassPlan:
-    """Safety posture for explicit CLI-native permission bypass requests."""
+    """Explicit CLI-native permission-bypass state for one profile."""
 
     name: str
     display_name: str
@@ -488,10 +477,6 @@ class CliPermissionBypassPlan:
     message: str
     bypass_args: tuple[str, ...] = ()
 
-    @property
-    def approval_requirement(self) -> ApprovalRequirement:
-        return ApprovalRequirement.for_risk(self.risk)
-
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
@@ -500,7 +485,6 @@ class CliPermissionBypassPlan:
             "risk": self.risk.value,
             "enabled": self.enabled,
             "bypass_args": list(self.bypass_args),
-            "approval_requirement": self.approval_requirement.to_dict(),
             "message": self.message,
         }
 
@@ -848,7 +832,6 @@ def plan_cli_launch(
             status=CliLaunchStatus.MISSING_EXECUTABLE,
             argv=argv,
             risk=risk,
-            approval_requirement=ApprovalRequirement.for_risk(risk),
             error=error,
             message="Executable is missing; Terminal Mode must not start this profile.",
         )
@@ -864,7 +847,6 @@ def plan_cli_launch(
         path=path,
         argv=argv,
         risk=risk,
-        approval_requirement=ApprovalRequirement.for_risk(risk),
         message="CLI launch argv is ready.",
     )
 
@@ -940,7 +922,7 @@ def apply_cli_permission_bypass(profile: str | CliProfile) -> CliProfile:
     """Return a launch profile with target-native permission-bypass args.
 
     Custom profiles do not have a known native permission mode; callers can
-    still treat them as trusted at the Decky launch gate, but their argv is not
+    still treat them as trusted as configured, but their argv is not
     rewritten here.
     """
 
@@ -970,7 +952,7 @@ def plan_cli_permission_bypass(
         status = CliPermissionBypassStatus.ENABLED if enabled else CliPermissionBypassStatus.AVAILABLE
         message = (
             "Custom profiles have no built-in bypass args. When enabled, Decky trusts "
-            "this profile's configured argv and will not block launch because of command risk."
+            "this profile's configured argv and reports command risk for display only."
         )
     else:
         status = CliPermissionBypassStatus.UNSUPPORTED
@@ -1133,7 +1115,6 @@ def _unsupported_setup_plan(profile: CliProfile, action: CliSetupAction) -> CliS
         status=CliSetupStatus.UNSUPPORTED,
         argv=(),
         risk=risk,
-        approval_requirement=ApprovalRequirement.for_risk(risk),
         error=f"{profile.display_name} does not support managed setup.",
         message="Managed setup is available only for built-in Codex and Claude profiles.",
     )
@@ -1158,7 +1139,6 @@ def _auth_setup_plan(
             status=CliSetupStatus.MISSING_EXECUTABLE,
             argv=auth_argv,
             risk=risk,
-            approval_requirement=ApprovalRequirement.for_risk(risk),
             npm_package=str(metadata.get("npm_package", "")) or None,
             install_prefix=managed_cli_npm_prefix(),
             bin_dir=managed_cli_npm_bin_dir(),
@@ -1174,7 +1154,6 @@ def _auth_setup_plan(
         status=CliSetupStatus.READY,
         argv=auth_argv,
         risk=risk,
-        approval_requirement=ApprovalRequirement.for_risk(risk),
         npm_package=str(metadata.get("npm_package", "")) or None,
         install_prefix=managed_cli_npm_prefix(),
         bin_dir=managed_cli_npm_bin_dir(),
@@ -1211,7 +1190,6 @@ def _install_setup_plan(
         status=CliSetupStatus.READY,
         argv=argv,
         risk=risk,
-        approval_requirement=ApprovalRequirement.for_risk(risk),
         npm_package=package_name,
         install_prefix=managed_cli_npm_prefix(),
         bin_dir=managed_cli_npm_bin_dir(),

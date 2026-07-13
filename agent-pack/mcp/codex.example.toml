@@ -8,7 +8,6 @@ command = "deck-assistant-mcp"
 args = ["serve"]
 enabled = true
 tool_timeout_sec = 60
-default_tools_approval_mode = "prompt"
 
 [mcp_servers.deck_assistant.env]
 DECK_ASSISTANT_MODE = "local"

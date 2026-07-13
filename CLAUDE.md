@@ -20,9 +20,9 @@ Before implementation work, read:
 - Do not read, export, copy, log, or upload AI CLI auth tokens.
 - Do not add a hosted model proxy to the default path.
 - Do not run background scans unless explicitly enabled by the user.
-- Do not auto-run commands on the plugin's own initiative; every terminal action is started by the user. The plugin does not add its own approval gate on top of the CLI — command safety is delegated to the underlying CLI (Claude/Codex) and to the user's explicit terminal input.
-- Keep the per-profile CLI permission-bypass toggle: disabled by default, visible in Settings, persisted per profile, shown as `danger` risk, and launching supported CLIs in their documented no-approval mode when enabled.
-- Do not run the Decky plugin as root by default.
+- Do not auto-run commands on the plugin's own initiative; every terminal action is started by the user. Command safety is delegated to the underlying CLI (Claude/Codex) and to the user's explicit terminal input.
+- Keep the per-profile CLI permission-bypass toggle visible in Settings, persisted per profile, shown as `danger` risk, and launching supported CLIs in their documented no-approval mode when enabled.
+- The Decky plugin may request the Decky root flag when needed; requested writes stay in the active CLI workflow.
 - Do not add telemetry by default.
 - Release channels: `main` is dev (pre-release tags `vX.Y.Z-dev.N`); the `stable` branch is stable (`vX.Y.Z`, GitHub latest). Never publish a dev build to stable or mark a `-dev` tag as latest. See [RELEASING.md](RELEASING.md).
 
@@ -30,7 +30,7 @@ Before implementation work, read:
 
 - Keep each change scoped to one coherent slice.
 - Prefer small, typed, testable modules.
-- Keep Decky UI thin; put safety, session, tool, and source management in backend/core packages.
+- Keep Decky UI thin; put risk metadata, session, tool, and source management in backend/core packages.
 - Add or update tests before UI polish when contracts or risk boundaries change.
 - Update docs whenever directories, commands, contracts, or risk behavior change.
 - Use [agent-pack/manifest.json](agent-pack/manifest.json) for repo-local skills, roles, commands, adapter templates, and conflict rules.

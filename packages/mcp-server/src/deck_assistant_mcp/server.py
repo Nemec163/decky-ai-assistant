@@ -5,10 +5,9 @@ top of the in-process tool dispatcher. It speaks newline-delimited JSON-RPC 2.0
 over stdin/stdout, exposes the static tool catalog through ``tools/list``, and
 routes ``tools/call`` through the same validated dispatcher used by the tests.
 
-The server is read-only by default: it wires real bounded diagnostics readers
-and an in-memory staged-action store. It never executes staged actions, never
-reads provider credential stores, and refuses approval-gated execution because
-no Decky approval token path is available to a CLI-launched server.
+The server wires bounded diagnostics readers. It never reads provider
+credential stores; requested fixes run through the active CLI's own
+shell/tooling.
 """
 
 from __future__ import annotations
@@ -19,7 +18,6 @@ from copy import deepcopy
 from collections.abc import Mapping, Sequence
 from typing import Any, TextIO
 
-from deck_assistant_core.actions import StagedActionStore
 from deck_assistant_core.cli import managed_cli_user_home
 from deck_assistant_core.diagnostics import (
     MAX_PROTON_EXCERPT_CHARACTERS,
@@ -93,7 +91,6 @@ def build_default_dispatcher(*, home_path: str | None = None) -> InProcessToolDi
         storage_path_planner=storage_path_planner,
         storage_report_reader=storage_report_reader,
         proton_log_reader=proton_log_reader,
-        staged_action_store=StagedActionStore(),
     )
 
 

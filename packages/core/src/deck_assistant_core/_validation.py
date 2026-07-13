@@ -2,9 +2,9 @@
 
 Every validator takes an explicit ``error`` exception type so callers raise their
 own module-specific validation error (``KnowledgeValidationError``,
-``DiagnosticsValidationError``, ``ActionValidationError``) while sharing a single
-implementation. This module imports nothing from the domain modules, so it never
-introduces import cycles.
+``DiagnosticsValidationError``) while sharing a single implementation. This
+module imports nothing from the domain modules, so it never introduces import
+cycles.
 
 Behavior notes that callers depend on:
 

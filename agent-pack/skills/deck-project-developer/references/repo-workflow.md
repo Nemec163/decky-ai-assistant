@@ -10,8 +10,8 @@
 
 ## Slice Discipline
 
-- A slice should have one owner: docs/workflow, core contract, CLI adapter, MCP tool, Decky UI, knowledge indexing, or action runner.
-- Do not mix UI polish with safety-critical backend changes unless the UI is required to verify the safety behavior.
+- A slice should have one owner: docs/workflow, core contract, CLI adapter, MCP tool, Decky UI, or knowledge indexing.
+- Do not mix UI polish with backend contract changes unless the UI is required to verify the behavior.
 - Add target-native packaging only after portable skills and MCP contracts exist.
 - Start each slice with `slice_goal`, `files_in_scope`, and a verification plan.
 - End each slice with `files_changed`, `verification`, `risk_notes`, `commit_status`, `allowed_next_role`, and `blocked_condition`.
@@ -24,5 +24,4 @@
 - Add deterministic shortcuts to `agent-pack/commands/*.md`.
 - Add target-specific references under `agent-pack/adapters/<target>/`.
 - Keep adapter files as templates until their target-native schema is verified against official docs.
-- Hand off to `deck-safety-reviewer` before finalizing any change to risk ceilings, approval-token boundaries, staged-action semantics, or execution permissions.
 - Hand off to `deck-knowledge-curator` when source, pack, or index-policy ownership is the main slice concern.

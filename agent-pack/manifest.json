@@ -44,11 +44,6 @@
       "id": "deck-knowledge-curator",
       "path": "agent-pack/skills/deck-knowledge-curator",
       "phase": "development_and_runtime"
-    },
-    {
-      "id": "deck-safe-action-review",
-      "path": "agent-pack/skills/deck-safe-action-review",
-      "phase": "development_and_runtime"
     }
   ],
   "roles": [
@@ -59,14 +54,6 @@
     {
       "id": "deck-diagnostician",
       "path": "agent-pack/agents/deck-diagnostician.md"
-    },
-    {
-      "id": "deck-safety-reviewer",
-      "path": "agent-pack/agents/deck-safety-reviewer.md"
-    },
-    {
-      "id": "deck-executor",
-      "path": "agent-pack/agents/deck-executor.md"
     },
     {
       "id": "deck-knowledge-curator",
@@ -81,10 +68,6 @@
     {
       "id": "diagnose-runtime",
       "path": "agent-pack/commands/diagnose-runtime.md"
-    },
-    {
-      "id": "stage-safe-action",
-      "path": "agent-pack/commands/stage-safe-action.md"
     }
   ],
   "runtime": {
@@ -95,13 +78,10 @@
     "AGENTS.md is canonical for repo development instructions.",
     "Use the deck-project-developer skill for repo-local implementation slices; runtime roles are explicit handoff boundaries, not the default editor.",
     "Portable skills own shared behavior; target adapters only wrap or package it.",
-    "Diagnosis roles never execute writes.",
+    "Runtime roles are organizational labels; requested fixes stay under the active CLI's own controls.",
     "One repo development slice has one active owner and one meaningful commit.",
     "Development handoffs must include scope, files changed, verification, risk notes, commit status, and next owner.",
-    "Safety review is required before changing risk ceilings, approval-token boundaries, staged-action semantics, or execution permissions.",
-    "deck-executor only runs staged actions with Decky approval tokens.",
-    "stage_action creates a pending approval record, not execution approval.",
-    "Decky approval flow is the only approval-token release path.",
-    "One staged action ID has one owner role at a time."
+    "Risk metadata must be visible while user-requested writes stay in the active CLI workflow.",
+    "Requested fixes run through the active CLI shell/tooling; Decky does not execute those fixes separately."
   ]
 }

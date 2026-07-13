@@ -1,4 +1,0 @@
-interface:
-  display_name: "Deck Safe Action Review"
-  short_description: "Review risk, approvals, and rollback plans"
-  default_prompt: "Use $deck-safe-action-review to classify a proposed local action and prepare the approval text."

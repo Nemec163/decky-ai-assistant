@@ -101,7 +101,7 @@ export function DiagnosticsSettings() {
         console.warn("Decky Loader install API failed; falling back to backend updater.", loaderInstallError);
       }
 
-      const result = await updatePluginToLatest({ confirmed: true });
+      const result = await updatePluginToLatest({});
       setPluginUpdate(result.plan);
       showToast({
         body: `Decky AI Assistant ${result.plan.latest_version} installed. Reloading plugin...`,

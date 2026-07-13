@@ -212,7 +212,6 @@ export type OpenTerminalProfileRequest = {
 
 export type OpenCliSetupActionRequest = OpenTerminalProfileRequest & {
   action: "install" | "auth" | "install_auth";
-  confirmed: boolean;
 };
 
 export type SessionIdRequest = {
@@ -280,7 +279,7 @@ export const getAgentPackInstallPlan = callable<
   AgentPackInstallPlanResult
 >("get_agent_pack_install_plan");
 export const installAgentPack = callable<
-  [{ profile_name: string; confirmed: boolean }],
+  [{ profile_name: string }],
   AgentPackInstallResult
 >("install_agent_pack");
 export const getPluginUpdatePlan = callable<[], PluginUpdatePlanResult>(
@@ -294,7 +293,7 @@ export const setReleaseChannel = callable<
   { channel: ReleaseChannel }
 >("set_release_channel");
 export const updatePluginToLatest = callable<
-  [{ confirmed: boolean }],
+  [{}],
   PluginUpdateResult
 >("update_plugin_to_latest");
 export const getPermissionBypassPlan = callable<

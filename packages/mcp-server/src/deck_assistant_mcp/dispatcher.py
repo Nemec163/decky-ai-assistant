@@ -20,23 +20,10 @@ from deck_assistant_core.knowledge import (
     KnowledgeSearchIndex,
     KnowledgeValidationError,
 )
-from deck_assistant_core.actions import (
-    ActionValidationError,
-    BackupSpec,
-    CommandSpec,
-    FileEditSpec,
-    RollbackStep,
-    StagedAction,
-    StagedActionStore,
-    StagedActionStoreError,
-)
-from deck_assistant_core.risk import ApprovalRequirement, RiskLevel
+from deck_assistant_core.risk import RiskLevel
 
 from deck_assistant_mcp.contracts import (
-    ToolApprovalMetadata,
     ToolContract,
-    ToolRisk,
-    export_tool_approval_summary,
     export_tool_catalog,
     validate_tool_contract_catalog,
 )
@@ -91,7 +78,7 @@ class ToolDispatchError:
 
 
 class InProcessToolDispatcher:
-    """Safe shell around the static MCP contract catalog."""
+    """Read/plan shell around the static MCP contract catalog."""
 
     def __init__(
         self,
@@ -100,7 +87,6 @@ class InProcessToolDispatcher:
         search_knowledge_handler: ToolHandler | None = None,
         list_sources_handler: ToolHandler | None = None,
         knowledge_search_index: KnowledgeSearchIndex | None = None,
-        staged_action_store: StagedActionStore | None = None,
         get_storage_report_handler: ToolHandler | None = None,
         read_proton_logs_handler: ToolHandler | None = None,
         propose_fix_handler: ToolHandler | None = None,
@@ -138,7 +124,6 @@ class InProcessToolDispatcher:
         self._search_knowledge_handler = search_knowledge_handler
         self._list_sources_handler = list_sources_handler
         self._knowledge_search_index = knowledge_search_index
-        self._staged_action_store = staged_action_store
         self._get_storage_report_handler = get_storage_report_handler
         self._read_proton_logs_handler = read_proton_logs_handler
         self._propose_fix_handler = propose_fix_handler
@@ -152,18 +137,16 @@ class InProcessToolDispatcher:
             "read_proton_logs": self._handle_read_proton_logs,
             "get_storage_report": self._handle_get_storage_report,
             "propose_fix": self._handle_propose_fix,
-            "stage_action": self._handle_stage_action,
         }
         self._assert_handler_catalog_alignment()
 
     def _assert_handler_catalog_alignment(self) -> None:
         """Convert handler/catalog drift into a load-time failure.
 
-        Every handler must back a real contract, and every non-approval-gated
-        contract must have a handler. Approval-gated contracts (e.g.
-        ``run_approved_action``) intentionally have no handler so they are
-        refused; ``stage_action`` is the one approval-gated tool with a handler
-        because it stages without executing.
+        Every handler must back a real contract, and every contract must have a
+        handler. The MCP catalog intentionally only exposes read, diagnostics,
+        and planning tools; requested fixes run through the active CLI's own
+        shell/tooling.
         """
 
         unknown_handlers = sorted(
@@ -178,11 +161,11 @@ class InProcessToolDispatcher:
         missing_handlers = sorted(
             contract.name
             for contract in self._contracts
-            if not contract.requires_approval and contract.name not in self._handlers
+            if contract.name not in self._handlers
         )
         if missing_handlers:
             raise ContractCatalogDriftError(
-                "non-approval-gated contracts lack a dispatcher handler: "
+                "implemented contracts lack a dispatcher handler: "
                 + ", ".join(missing_handlers)
             )
 
@@ -195,19 +178,6 @@ class InProcessToolDispatcher:
         """Return a detached tool catalog export."""
 
         return export_tool_catalog(self._contracts)
-
-    def export_approval_summary(self) -> dict[str, Any]:
-        """Return detached approval metadata for all tools."""
-
-        return export_tool_approval_summary(self._contracts)
-
-    def get_tool_approval_metadata(self, tool_name: str) -> dict[str, Any]:
-        """Return detached approval metadata for a single tool."""
-
-        contract = self._contracts_by_name.get(tool_name)
-        if contract is None:
-            raise KeyError(tool_name)
-        return ToolApprovalMetadata.from_contract(contract).to_dict()
 
     def dispatch_tool_call(
         self,
@@ -240,37 +210,8 @@ class InProcessToolDispatcher:
                 ),
             )
 
-        if contract.requires_approval and not (
-            tool_name == "stage_action" and self._staged_action_store is not None
-        ):
-            return self._error_response(
-                tool_name,
-                ToolDispatchError(
-                    code="tool_refused",
-                    message=(
-                        f"{tool_name} cannot run in the in-process dispatcher shell "
-                        "without Decky approval and executor integration"
-                    ),
-                    details={
-                        "risk": contract.risk.value,
-                        "requires_approval": contract.requires_approval,
-                        "approval_gate": "decky_approval",
-                    },
-                ),
-            )
-
-        handler = self._handlers.get(tool_name)
-        if handler is None:
-            return self._error_response(
-                tool_name,
-                ToolDispatchError(
-                    code="tool_unimplemented",
-                    message=f"{tool_name} is not implemented in the in-process dispatcher shell",
-                    details={"risk": contract.risk.value},
-                ),
-            )
-
         try:
+            handler = self._handlers[tool_name]
             result = handler(normalized_arguments)
             _validate_schema(contract.output_schema, result)
             _validate_output_invariants(tool_name, result)
@@ -299,24 +240,6 @@ class InProcessToolDispatcher:
                     code="invalid_output",
                     message=f"Output for {tool_name} failed core knowledge validation",
                     details={"path": "$", "reason": str(error)},
-                ),
-            )
-        except ActionValidationError as error:
-            return self._error_response(
-                tool_name,
-                ToolDispatchError(
-                    code="invalid_input",
-                    message=f"Input for {tool_name} failed action validation",
-                    details={"path": "$.action", "reason": str(error)},
-                ),
-            )
-        except StagedActionStoreError as error:
-            return self._error_response(
-                tool_name,
-                ToolDispatchError(
-                    code="staging_failed",
-                    message=f"{tool_name} could not update staged action state",
-                    details={"reason": str(error)},
                 ),
             )
 
@@ -430,31 +353,10 @@ class InProcessToolDispatcher:
             "proposal": {
                 "title": "Manual review required",
                 "risk": RiskLevel.READ_ONLY.value,
-                "requires_approval": False,
-                "approval_gate": _approval_gate_payload(RiskLevel.READ_ONLY),
                 "steps": [],
                 "commands": [],
                 "file_edits": [],
-                "backups": [],
-                "rollback": [],
             }
-        }
-
-    def _handle_stage_action(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
-        if self._staged_action_store is None:
-            raise StagedActionStoreError("staged action store is not configured")
-
-        action = _staged_action_from_input(arguments["action"])
-        display_plan = action.render_approval_plan()
-        metadata = self._staged_action_store.stage_action(action)
-        return {
-            "staged_action_id": metadata.action_id,
-            "risk": metadata.risk.value,
-            "requires_approval": True,
-            "approval_gate": display_plan["approval_gate"],
-            "display_plan": display_plan,
-            "staged_at": metadata.staged_at,
-            "approved_at": metadata.approved_at,
         }
 
 
@@ -464,7 +366,6 @@ def create_in_process_tool_dispatcher(
     search_knowledge_handler: ToolHandler | None = None,
     list_sources_handler: ToolHandler | None = None,
     knowledge_search_index: KnowledgeSearchIndex | None = None,
-    staged_action_store: StagedActionStore | None = None,
     get_storage_report_handler: ToolHandler | None = None,
     read_proton_logs_handler: ToolHandler | None = None,
     propose_fix_handler: ToolHandler | None = None,
@@ -479,39 +380,12 @@ def create_in_process_tool_dispatcher(
         search_knowledge_handler=search_knowledge_handler,
         list_sources_handler=list_sources_handler,
         knowledge_search_index=knowledge_search_index,
-        staged_action_store=staged_action_store,
         get_storage_report_handler=get_storage_report_handler,
         read_proton_logs_handler=read_proton_logs_handler,
         propose_fix_handler=propose_fix_handler,
         storage_path_planner=storage_path_planner,
         storage_report_reader=storage_report_reader,
         proton_log_reader=proton_log_reader,
-    )
-
-
-def _staged_action_from_input(action_data: Any) -> StagedAction:
-    data = _to_output_mapping(action_data, "staged action")
-    return StagedAction.create(
-        title=_required_output_value(data, "title", "staged action"),
-        risk=RiskLevel(_required_output_value(data, "risk", "staged action")),
-        commands=tuple(
-            CommandSpec.from_dict(_to_output_mapping(command, "staged action command"))
-            for command in data.get("commands", ())
-        ),
-        file_edits=tuple(
-            FileEditSpec.from_dict(_to_output_mapping(file_edit, "staged action file edit"))
-            for file_edit in data.get("file_edits", ())
-        ),
-        backups=tuple(
-            BackupSpec.from_dict(_to_output_mapping(backup, "staged action backup"))
-            for backup in data.get("backups", ())
-        ),
-        backup_note=data.get("backup_note"),
-        rollback=tuple(
-            RollbackStep.from_dict(_to_output_mapping(step, "staged action rollback"))
-            for step in data.get("rollback", ())
-        ),
-        rollback_note=data.get("rollback_note"),
     )
 
 
@@ -748,8 +622,6 @@ def _coerce_core_report(report_type: Any, data: Mapping[str, Any]) -> dict[str, 
 def _validate_output_invariants(tool_name: str, result: Mapping[str, Any]) -> None:
     if tool_name == "search_knowledge":
         _validate_knowledge_search_invariants(result)
-    if tool_name == "propose_fix":
-        _validate_fix_proposal_invariants(result)
 
 
 def _validate_knowledge_search_invariants(result: Mapping[str, Any]) -> None:
@@ -770,56 +642,6 @@ def _validate_knowledge_search_invariants(result: Mapping[str, Any]) -> None:
                 f"$.results[{index}].citation.end_line",
                 "expected end_line >= start_line",
             )
-
-
-def _validate_fix_proposal_invariants(result: Mapping[str, Any]) -> None:
-    proposal = result["proposal"]
-    risk = RiskLevel(proposal["risk"])
-    expected_gate = _approval_gate_payload(risk)
-    expected_requires_approval = risk is not RiskLevel.READ_ONLY
-
-    if proposal["requires_approval"] != expected_requires_approval:
-        raise _SchemaValidationError(
-            "$.proposal.requires_approval",
-            f"expected {expected_requires_approval} for risk {risk.value}",
-        )
-
-    gate = proposal["approval_gate"]
-    for field_name, expected_value in expected_gate.items():
-        if field_name == "summary":
-            continue
-        if gate[field_name] != expected_value:
-            raise _SchemaValidationError(
-                f"$.proposal.approval_gate.{field_name}",
-                f"expected {expected_value!r} for risk {risk.value}",
-            )
-
-
-def _approval_gate_payload(risk: RiskLevel) -> dict[str, Any]:
-    requirement = ApprovalRequirement.for_risk(risk)
-    gate_type = "approval_required"
-    if risk is RiskLevel.READ_ONLY:
-        gate_type = "user_request"
-    elif risk is RiskLevel.DANGER:
-        gate_type = "separate_confirmation_required"
-
-    return {
-        "type": gate_type,
-        "summary": _approval_gate_summary(risk),
-        "requires_plan": requirement.requires_plan,
-        "requires_exact_commands_or_diffs": requirement.requires_exact_commands_or_diffs,
-        "requires_backup_or_note": requirement.requires_backup_or_note,
-        "requires_separate_confirmation": requirement.requires_separate_confirmation,
-        "may_execute_after_user_request": requirement.may_execute_after_user_request,
-    }
-
-
-def _approval_gate_summary(risk: RiskLevel) -> str:
-    if risk is RiskLevel.READ_ONLY:
-        return "Read-only response only; no Decky approval is required."
-    if risk is RiskLevel.DANGER:
-        return "Dangerous actions require separate explicit confirmation in Decky."
-    return "Decky approval is required before local execution."
 
 
 def _validate_schema(schema: Mapping[str, Any], value: Any, path: str = "$") -> None:

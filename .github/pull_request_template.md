@@ -11,7 +11,7 @@
 
 - [ ] No AI CLI credentials, local tokens, or secret logs are committed
 - [ ] Risk boundaries are unchanged, or the change updates the relevant docs/tests
-- [ ] Write or destructive behavior is staged behind explicit approval
+- [ ] Write or destructive behavior stays in the user-started CLI workflow and is risk-labeled when surfaced
 
 ## Docs
 

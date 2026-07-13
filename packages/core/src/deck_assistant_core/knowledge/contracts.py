@@ -654,8 +654,8 @@ class KnowledgeSourceRegistry:
     """In-memory registry for local knowledge source state.
 
     The registry never fetches, indexes, deletes files, or mutates source
-    artifacts. Runtime callers should still stage any persisted source-state
-    changes through the approval flow.
+    artifacts. Runtime callers can surface persisted source-state changes as
+    visible CLI plans when that helps the active workflow.
     """
 
     def __init__(self, records: Iterable[KnowledgeSourceRecord] = ()) -> None:

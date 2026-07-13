@@ -31,7 +31,6 @@ class NativeAgentPackInstallTests(unittest.TestCase):
         self.assertEqual(plan.risk.value, "low_write")
         self.assertIn("/.agents/plugins/decky-ai-assistant", plan.install_dir or "")
         self.assertTrue(any(path.endswith("/.agents/plugins/marketplace.json") for path in plan.write_paths))
-        self.assertTrue(plan.approval_requirement.requires_plan)
 
     def test_install_codex_pack_writes_plugin_marketplace_skills_and_workspace_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -138,7 +137,10 @@ class NativeAgentPackInstallTests(unittest.TestCase):
             )
             self.assertTrue((home / ".claude/agents/deck-planner.md").is_file())
             self.assertTrue((home / ".claude/commands/diagnose-runtime.md").is_file())
-            self.assertTrue((home / ".claude/commands/stage-safe-action.md").is_file())
+            self.assertEqual(
+                sorted(path.name for path in (home / ".claude/commands").glob("*.md")),
+                ["diagnose-runtime.md"],
+            )
             self.assertTrue((workspace / ".decky-ai-assistant-managed.json").is_file())
             self.assertTrue((workspace / "CLAUDE.md").is_file())
             self.assertIn(

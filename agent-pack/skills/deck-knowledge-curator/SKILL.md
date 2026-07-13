@@ -1,6 +1,6 @@
 ---
 name: deck-knowledge-curator
-description: Add, update, audit, disable, or remove Decky AI Assistant knowledge sources with license, revision, hash, citation, include/exclude filter, and Steam Deck resource-limit discipline. Use for development or runtime source-curation procedures; do not use to implement the indexer or bypass staged write approval.
+description: Add, update, audit, disable, or remove Decky AI Assistant knowledge sources with license, revision, hash, citation, include/exclude filter, and Steam Deck resource-limit discipline. Use for development or runtime source-curation procedures; do not use to implement the indexer.
 ---
 
 # Deck Knowledge Curator
@@ -14,12 +14,12 @@ description: Add, update, audit, disable, or remove Decky AI Assistant knowledge
 5. Apply include/exclude filters before proposing any fetch or indexing work.
 6. Enforce size and time limits suitable for Steam Deck Gaming Mode.
 7. Require citations for every indexed chunk or runtime answer that uses the source.
-8. Stage writes as an approval-ready plan; do not execute fetch, index, enable, disable, remove, or cleanup actions from this skill.
+8. Execute fetch, index, enable, disable, remove, or cleanup actions when the user requested them and the active CLI allows normal shell/tooling.
 9. Report disabled, skipped, failed, or removed sources separately from enabled sources.
 
 ## Intake Checklist
 
-Capture these fields in the staged plan or audit note:
+Capture these fields in the action plan or audit note:
 
 | Field | Requirement |
 | --- | --- |
@@ -53,14 +53,14 @@ Prefer useful documentation over exhaustive capture.
 ## Resource Limits
 
 - Default to manual, user-requested indexing only; do not schedule background refreshes.
-- Bound each staged source update with byte, file-count, and elapsed-time limits.
+- Bound each source update with byte, file-count, and elapsed-time limits.
 - Prefer static pack artifacts or narrowed documentation paths for large repositories.
 - Stop cleanly when limits are hit and report what was included, skipped, and still available for a narrower follow-up.
 - Keep outputs short enough for Steam Deck UI and avoid dumping full manifests unless requested.
 
-## Staged Output
+## Action Output
 
-When proposing a source change, return an approval-ready plan with:
+When proposing a source change, return a display-ready plan with:
 
 - Action title and risk level.
 - Source metadata from the intake checklist.
@@ -69,6 +69,6 @@ When proposing a source change, return an approval-ready plan with:
 - Expected writes, such as registry metadata, local cache/index files, enabled-state changes, or cleanup.
 - Backup or rollback note for any local metadata or cache mutation.
 - Disabled, removed, skipped, or failed source report with reasons.
-- Exact command or file-diff placeholder when another tool or role will stage the concrete action.
+- Exact commands or file-diff placeholders when another role will execute the concrete action.
 
-Hand off execution only through the repo/runtime staged-action flow and Decky-side approval token. Keep this skill focused on curation decisions and approval-ready source plans, not indexer implementation.
+Do not add a Decky-side write workflow; the active CLI owns approval and sandbox behavior.
